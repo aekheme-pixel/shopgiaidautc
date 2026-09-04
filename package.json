@@ -1,0 +1,14 @@
+{
+  "name": "custom151",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply custom151-db --remote"
+  },
+  "devDependencies": {
+    "wrangler": "latest"
+  }
+}
