@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ADMIN — CUSTOM 151</title>
+
+<style>
+body{
+margin:0;
+background:#09090b;
+color:#eee;
+font-family:Arial
+}
+
+main{
+max-width:1200px;
+margin:auto;
+padding:25px
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(4,1fr);
+gap:14px
+}
+
+.card{
+background:#151519;
+border:1px solid #2b2b31;
+border-radius:12px;
+padding:18px
+}
+
+.red{color:#ed1b2f}
+.gold{color:#ffbf18}
+
+.btn{
+padding:10px 14px;
+border-radius:8px;
+border:1px solid #333;
+background:#202025;
+color:#fff
+}
+
+.btn.redbg{
+background:#ed1b2f;
+border:0
+}
+
+.tablewrap{
+overflow:auto
+}
+
+.table{
+width:100%;
+border-collapse:collapse
+}
+
+.table th,
+.table td{
+padding:12px;
+border-bottom:1px solid #2a2a30;
+text-align:left;
+white-space:nowrap
+}
+
+input,
+textarea{
+background:#09090b;
+border:1px solid #333;
+color:#fff;
+padding:10px;
+border-radius:7px;
+width:100%;
+box-sizing:border-box;
+margin:5px 0 12px
+}
+
+form{
+background:#151519;
+padding:18px;
+border-radius:12px;
+margin:20px 0
+}
+
+@media(max-width:800px){
+.grid{
+grid-template-columns:1fr 1fr
+}
+}
+</style>
+</head>
+
+<body>
+
+<main>
+
+<h1>
+CUSTOM <span class="red">151</span> — ADMIN
+</h1>
+
+<p id="me"></p>
+
+<div class="grid">
+
+<div class="card">
+<small>ĐỘI</small>
+<h2 id="teamCount">—</h2>
+</div>
+
+<div class="card">
+<small>GIAO DỊCH</small>
+<h2 id="payCount">—</h2>
+</div>
+
+<div class="card">
+<small>GIẢI</small>
+<h2 id="tourCount">—</h2>
+</div>
+
+<div class="card">
+<small>TRẠNG THÁI</small>
+<h2 class="gold">LIVE</h2>
+</div>
+
+</div>
+
+<form onsubmit="createTournament(event)">
+
+<h2>Tạo giải</h2>
+
+<input
+id="name"
+placeholder="Tên giải"
+required>
+
+<input
+id="fee"
+type="number"
+placeholder="Phí đăng ký (VND)"
+required>
+
+<input
+id="max"
+type="number"
+value="48"
+placeholder="Số đội">
+
+<textarea
+id="desc"
+placeholder="Mô tả">
+</textarea>
+
+<button class="btn redbg">
+TẠO GIẢI
+</button>
+
+</form>
+
+<section>
+
+<h2>Đội tuyển</h2>
+
+<div class="tablewrap">
+
+<table class="table">
+
+<thead>
+<tr>
+<th>ID</th>
+<th>Đội</th>
+<th>Chủ đội</th>
+<th>Trạng thái</th>
+<th>Hành động</th>
+</tr>
+</thead>
+
+<tbody id="teams"></tbody>
+
+</table>
+
+</div>
+
+</section>
+
+<section>
+
+<h2>Giao dịch</h2>
+
+<div class="tablewrap">
+
+<table class="table">
+
+<thead>
+<tr>
+<th>Mã đơn</th>
+<th>Đội</th>
+<th>Số tiền</th>
+<th>Trạng thái</th>
+<th>Duyệt</th>
+</tr>
+</thead>
+
+<tbody id="payments"></tbody>
+
+</table>
+
+</div>
+
+</section>
+
+<button class="btn" onclick="logout()">
+Đăng xuất
+</button>
+
+</main>
+
+<script>
+
+const $=s=>document.querySelector(s);
+
+async function api(u,o={}){
+
+const r=await fetch(u,{
+headers:{
+'content-type':'application/json',
+...(o.headers||{})
+},
+...o
+});
+
+const d=await r.json().catch(()=>({}));
+
+if(!r.ok)
+throw Error(d.error||'Lỗi');
+
+return d;
+}
+
+async function init(){
+
+try{
+
+const m=await api('/api/auth/me');
+
+if(
+!m.user ||
+!['ADMIN','SUPER_ADMIN'].includes(m.user.role)
+)
+throw Error('Bạn chưa đăng nhập admin');
+
+$('#me').textContent=
+m.user.email+' • '+m.user.role;
+
+const [t,p,tr]=await Promise.all([
+api('/api/admin/teams'),
+api('/api/admin/payments'),
+api('/api/tournaments')
+]);
+
+$('#teamCount').textContent=t.teams.length;
+$('#payCount').textContent=p.payments.length;
+$('#tourCount').textContent=tr.tournaments.length;
+
+$('#teams').innerHTML=t.teams.map(x=>`
+
+<tr>
+
+<td>${x.id}</td>
+
+<td>${x.name}</td>
+
+<td>${x.owner_email}</td>
+
+<td>${x.status}</td>
+
+<td>
+
+<button
+class="btn redbg"
+onclick="teamStatus(${x.id},'APPROVED')">
+DUYỆT
+</button>
+
+<button
+class="btn"
+onclick="teamStatus(${x.id},'REJECTED')">
+TỪ CHỐI
+</button>
+
+</td>
+
+</tr>
+
+`).join('');
+
+$('#payments').innerHTML=p.payments.map(x=>`
+
+<tr>
+
+<td>${x.order_code}</td>
+
+<td>${x.team_name}</td>
+
+<td>
+${Number(x.amount).toLocaleString('vi-VN')}đ
+</td>
+
+<td>${x.status}</td>
+
+<td>
+
+<button
+class="btn redbg"
+onclick="payStatus(${x.id},'PAID')">
+DUYỆT
+</button>
+
+<button
+class="btn"
+onclick="payStatus(${x.id},'REJECTED')">
+TỪ CHỐI
+</button>
+
+</td>
+
+</tr>
+
+`).join('');
+
+}catch(e){
+
+alert(e.message);
+location.href='/';
+
+}
+}
+
+async function createTournament(e){
+
+e.preventDefault();
+
+try{
+
+await api('/api/tournaments',{
+method:'POST',
+body:JSON.stringify({
+name:$('#name').value,
+fee:Number($('#fee').value),
+max_teams:Number($('#max').value),
+description:$('#desc').value
+})
+});
+
+alert('Đã tạo giải');
+
+location.reload();
+
+}catch(x){
+alert(x.message);
+}
+}
+
+async function teamStatus(id,status){
+
+try{
+
+await api('/api/admin/teams/status',{
+method:'POST',
+body:JSON.stringify({
+team_id:id,
+status
+})
+});
+
+init();
+
+}catch(x){
+alert(x.message);
+}
+}
+
+async function payStatus(id,status){
+
+try{
+
+await api('/api/admin/payments/status',{
+method:'POST',
+body:JSON.stringify({
+payment_id:id,
+status
+})
+});
+
+init();
+
+}catch(x){
+alert(x.message);
+}
+}
+
+async function logout(){
+
+await api('/api/auth/logout');
+
+location.href='/';
+}
+
+init();
+
+</script>
+
+</body>
+</html>
