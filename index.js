@@ -1,11 +1,13 @@
 // ============================================================
-// CUSTOM 151 — CLOUDFLARE WORKER + D1
-// Auth tương thích schema D1 hiện tại
+// CUSTOM 151 - CLOUDFLARE WORKER + D1
+// Auth: PBKDF2 + password_salt
+// Session: D1 sessions.token + HttpOnly Cookie
+// Compatible with current database
 // ============================================================
 
 const SESSION_DAYS = 7;
+const SESSION_SECONDS = SESSION_DAYS * 86400;
 const PBKDF2_ITERATIONS = 100000;
-const SESSION_BYTES = 32;
 
 // ============================================================
 // RESPONSE HELPERS
@@ -22,25 +24,19 @@ function json(data, status = 200, extraHeaders = {}) {
   });
 }
 
-function ok(data = {}, status = 200) {
-  return json(
-    {
-      success: true,
-      ...data
-    },
-    status
-  );
+function ok(data = {}) {
+  return json({
+    success: true,
+    ...data
+  });
 }
 
 function fail(message, status = 400, code = "BAD_REQUEST") {
-  return json(
-    {
-      success: false,
-      error: message,
-      code
-    },
-    status
-  );
+  return json({
+    success: false,
+    error: message,
+    code
+  }, status);
 }
 
 // ============================================================
@@ -51,14 +47,12 @@ async function bodyJSON(request) {
   try {
     return await request.json();
   } catch {
-    return null;
+    throw new Error("Dữ liệu gửi lên không hợp lệ.");
   }
 }
 
 function cleanEmail(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
+  return String(value || "").trim().toLowerCase();
 }
 
 function validEmail(email) {
@@ -73,7 +67,7 @@ function validPassword(password) {
 // RANDOM / BASE64
 // ============================================================
 
-function randomBytes(length) {
+function randomBytes(length = 32) {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return bytes;
@@ -86,22 +80,38 @@ function bytesToBase64(bytes) {
     binary += String.fromCharCode(byte);
   }
 
-  return btoa(binary);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 function base64ToBytes(value) {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
+  try {
+    const normalized = String(value)
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
 
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+    const padded =
+      normalized + "=".repeat((4 - normalized.length % 4) % 4);
+
+    const binary = atob(padded);
+
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    return bytes;
+  } catch {
+    return null;
   }
-
-  return bytes;
 }
 
 // ============================================================
 // PASSWORD HASH
+// Compatible with existing password_salt + PBKDF2 SHA-256
 // ============================================================
 
 async function derivePassword(password, saltBytes) {
@@ -110,12 +120,14 @@ async function derivePassword(password, saltBytes) {
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     encoder.encode(password),
-    "PBKDF2",
+    {
+      name: "PBKDF2"
+    },
     false,
     ["deriveBits"]
   );
 
-  const bits = await crypto.subtle.deriveBits(
+  const derived = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
       salt: saltBytes,
@@ -126,113 +138,116 @@ async function derivePassword(password, saltBytes) {
     256
   );
 
-  return new Uint8Array(bits);
+  return new Uint8Array(derived);
 }
 
-async function hashPassword(password) {
-  const salt = randomBytes(32);
+async function createPasswordHash(password) {
+  const salt = randomBytes(16);
+
   const hash = await derivePassword(password, salt);
 
   return {
-    salt: bytesToBase64(salt),
-    hash: bytesToBase64(hash)
+    passwordHash: bytesToBase64(hash),
+    passwordSalt: bytesToBase64(salt)
   };
 }
 
-function safeEqual(a, b) {
-  const aa = String(a || "");
-  const bb = String(b || "");
+async function verifyPassword(password, storedHash, storedSalt) {
+  if (!storedHash || !storedSalt) {
+    return false;
+  }
 
-  if (aa.length !== bb.length) {
+  const salt = base64ToBytes(storedSalt);
+
+  if (!salt) {
+    return false;
+  }
+
+  const calculated = await derivePassword(password, salt);
+
+  const expected = base64ToBytes(storedHash);
+
+  if (!expected || expected.length !== calculated.length) {
     return false;
   }
 
   let result = 0;
 
-  for (let i = 0; i < aa.length; i++) {
-    result |= aa.charCodeAt(i) ^ bb.charCodeAt(i);
+  for (let i = 0; i < calculated.length; i++) {
+    result |= calculated[i] ^ expected[i];
   }
 
   return result === 0;
 }
 
-async function verifyPassword(password, storedHash, storedSalt) {
-  if (!storedHash) {
-    return false;
+// ============================================================
+// COOKIE HELPERS
+// ============================================================
+
+function getCookie(request, name) {
+  const cookieHeader = request.headers.get("Cookie");
+
+  if (!cookieHeader) {
+    return null;
   }
 
-  // ----------------------------------------------------------
-  // Cách 1:
-  // DB có password_salt riêng
-  // ----------------------------------------------------------
+  const cookies = cookieHeader.split(";");
 
-  if (storedSalt) {
-    try {
-      const salt = base64ToBytes(storedSalt);
-      const hash = await derivePassword(password, salt);
-      const calculated = bytesToBase64(hash);
+  for (const cookie of cookies) {
+    const index = cookie.indexOf("=");
 
-      return safeEqual(calculated, storedHash);
-    } catch {
-      return false;
-    }
+    if (index === -1) continue;
+
+    const key = cookie.slice(0, index).trim();
+
+    if (key !== name) continue;
+
+    return cookie.slice(index + 1).trim();
   }
 
-  // ----------------------------------------------------------
-  // Cách 2:
-  // password_hash tự chứa salt
-  //
-  // pbkdf2$100000$salt$hash
-  // ----------------------------------------------------------
+  return null;
+}
 
-  const parts = String(storedHash).split("$");
+function sessionCookie(token, request) {
+  const secure =
+    new URL(request.url).protocol === "https:"
+      ? "; Secure"
+      : "";
 
-  if (parts.length === 4 && parts[0] === "pbkdf2") {
-    try {
-      const iterations = Number(parts[1]);
-      const salt = base64ToBytes(parts[2]);
-      const expected = parts[3];
+  return [
+    `session=${encodeURIComponent(token)}`,
+    "HttpOnly",
+    "Path=/",
+    "SameSite=Lax",
+    `Max-Age=${SESSION_SECONDS}`,
+    secure
+  ].filter(Boolean).join("; ");
+}
 
-      const encoder = new TextEncoder();
+function clearSessionCookie(request) {
+  const secure =
+    new URL(request.url).protocol === "https:"
+      ? "; Secure"
+      : "";
 
-      const keyMaterial = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(password),
-        "PBKDF2",
-        false,
-        ["deriveBits"]
-      );
-
-      const bits = await crypto.subtle.deriveBits(
-        {
-          name: "PBKDF2",
-          salt,
-          iterations,
-          hash: "SHA-256"
-        },
-        keyMaterial,
-        256
-      );
-
-      return safeEqual(
-        bytesToBase64(new Uint8Array(bits)),
-        expected
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
+  return [
+    "session=",
+    "HttpOnly",
+    "Path=/",
+    "SameSite=Lax",
+    "Max-Age=0",
+    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    secure
+  ].filter(Boolean).join("; ");
 }
 
 // ============================================================
-// DB SCHEMA HELPERS
+// DATABASE HELPERS
 // ============================================================
 
-async function getColumns(env, table) {
+async function getUserColumns(env) {
   const result = await env.DB
-    .prepare(`PRAGMA table_info("${table}")`)
+    .prepare("PRAGMA table_info(users)")
     .all();
 
   return new Set(
@@ -240,138 +255,54 @@ async function getColumns(env, table) {
   );
 }
 
-async function getTableSQL(env, table) {
-  const row = await env.DB
-    .prepare(`
-      SELECT sql
-      FROM sqlite_master
-      WHERE type = 'table'
-      AND name = ?
-      LIMIT 1
-    `)
-    .bind(table)
-    .first();
+async function getSession(request, env) {
+  const token = getCookie(request, "session");
 
-  return String(row?.sql || "");
-}
-
-// ============================================================
-// ROLE COMPATIBILITY
-// ============================================================
-
-async function getAllowedRoles(env) {
-  const sql = await getTableSQL(env, "users");
-
-  const match = sql.match(
-    /role\s+IN\s*\(([^)]*)\)/i
-  );
-
-  if (!match) {
-    return [];
+  if (!token) {
+    return null;
   }
 
-  return match[1]
-    .split(",")
-    .map(x => x.trim().replace(/^['"]|['"]$/g, ""))
-    .filter(Boolean);
-}
+  try {
+    const now = Math.floor(Date.now() / 1000);
 
-async function getDefaultUserRole(env) {
-  const roles = await getAllowedRoles(env);
+    const session = await env.DB
+      .prepare(`
+        SELECT
+          sessions.token,
+          sessions.user_id,
+          sessions.expires_at,
+          users.id,
+          users.email,
+          users.role
+        FROM sessions
+        INNER JOIN users
+          ON users.id = sessions.user_id
+        WHERE sessions.token = ?
+          AND sessions.expires_at > ?
+        LIMIT 1
+      `)
+      .bind(token, now)
+      .first();
 
-  // Nếu DB cho USER thì ưu tiên USER.
-  if (roles.includes("USER")) {
-    return "USER";
+    if (!session) {
+      return null;
+    }
+
+    return session;
+  } catch {
+    return null;
   }
-
-  // Schema hiện tại của bạn đang có PLAYER.
-  if (roles.includes("PLAYER")) {
-    return "PLAYER";
-  }
-
-  // Nếu không có CHECK hoặc không đọc được.
-  if (!roles.length) {
-    return "PLAYER";
-  }
-
-  // Chọn role đầu tiên hợp lệ.
-  return roles[0];
-}
-
-function publicRole(role) {
-  // Frontend cũ thường coi USER là người dùng thường.
-  // DB của bạn có thể dùng PLAYER thay cho USER.
-  if (role === "PLAYER") {
-    return "USER";
-  }
-
-  return role;
-}
-
-// ============================================================
-// SESSION COMPATIBILITY
-// ============================================================
-
-async function getSessionColumns(env) {
-  return await getColumns(env, "sessions");
-}
-
-async function getSessionTokenColumn(env) {
-  const columns = await getSessionColumns(env);
-
-  if (columns.has("token")) {
-    return "token";
-  }
-
-  if (columns.has("session_token")) {
-    return "session_token";
-  }
-
-  if (columns.has("sessionToken")) {
-    return "sessionToken";
-  }
-
-  return null;
 }
 
 async function createSession(env, userId) {
-  const columns = await getSessionColumns(env);
-
-  const tokenColumn = await getSessionTokenColumn(env);
-
-  if (!tokenColumn) {
-    throw new Error(
-      "Bảng sessions không có cột token/session_token"
-    );
-  }
-
-  if (!columns.has("user_id")) {
-    throw new Error(
-      "Bảng sessions không có cột user_id"
-    );
-  }
-
-  if (!columns.has("expires_at")) {
-    throw new Error(
-      "Bảng sessions không có cột expires_at"
-    );
-  }
-
-  const token = bytesToBase64(
-    randomBytes(SESSION_BYTES)
-  )
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-
+  const token = bytesToBase64(randomBytes(32));
   const expiresAt =
-    Math.floor(Date.now() / 1000) +
-    SESSION_DAYS * 86400;
+    Math.floor(Date.now() / 1000) + SESSION_SECONDS;
 
   await env.DB
     .prepare(`
       INSERT INTO sessions
-      ("${tokenColumn}", user_id, expires_at)
+        (token, user_id, expires_at)
       VALUES (?, ?, ?)
     `)
     .bind(
@@ -387,111 +318,6 @@ async function createSession(env, userId) {
   };
 }
 
-// ============================================================
-// COOKIE
-// ============================================================
-
-function getCookie(request, name) {
-  const header = request.headers.get("Cookie") || "";
-
-  const parts = header.split(";");
-
-  for (const part of parts) {
-    const [key, ...rest] = part.trim().split("=");
-
-    if (key === name) {
-      return decodeURIComponent(rest.join("="));
-    }
-  }
-
-  return null;
-}
-
-function sessionCookie(token) {
-  return [
-    `session=${encodeURIComponent(token)}`,
-    "Path=/",
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax",
-    `Max-Age=${SESSION_DAYS * 86400}`
-  ].join("; ");
-}
-
-function clearSessionCookie() {
-  return [
-    "session=",
-    "Path=/",
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax",
-    "Max-Age=0"
-  ].join("; ");
-}
-
-// ============================================================
-// CURRENT USER
-// ============================================================
-
-async function getCurrentUser(request, env) {
-  const token = getCookie(request, "session");
-
-  if (!token) {
-    return null;
-  }
-
-  const columns = await getSessionColumns(env);
-  const tokenColumn = await getSessionTokenColumn(env);
-
-  if (!tokenColumn) {
-    return null;
-  }
-
-  if (!columns.has("user_id") || !columns.has("expires_at")) {
-    return null;
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-
-  const session = await env.DB
-    .prepare(`
-      SELECT user_id, expires_at
-      FROM sessions
-      WHERE "${tokenColumn}" = ?
-      AND expires_at > ?
-      LIMIT 1
-    `)
-    .bind(token, now)
-    .first();
-
-  if (!session) {
-    return null;
-  }
-
-  const user = await env.DB
-    .prepare(`
-      SELECT *
-      FROM users
-      WHERE id = ?
-      LIMIT 1
-    `)
-    .bind(session.user_id)
-    .first();
-
-  if (!user) {
-    return null;
-  }
-
-  return {
-    ...user,
-    role: publicRole(user.role)
-  };
-}
-
-// ============================================================
-// AUDIT LOG
-// ============================================================
-
 async function audit(
   env,
   userId,
@@ -500,48 +326,36 @@ async function audit(
   details = null
 ) {
   try {
-    const columns = await getColumns(
-      env,
-      "audit_logs"
-    );
-
-    if (
-      !columns.has("user_id") ||
-      !columns.has("action")
-    ) {
-      return;
-    }
-
     await env.DB
       .prepare(`
         INSERT INTO audit_logs
-        (user_id, action, target, details)
+          (user_id, action, target, details)
         VALUES (?, ?, ?, ?)
       `)
       .bind(
-        userId || null,
+        userId ?? null,
         action,
         target,
-        details
-          ? JSON.stringify(details)
-          : null
+        details ? JSON.stringify(details) : null
       )
       .run();
   } catch {
-    // Audit không được phép làm hỏng request chính.
+    // Audit log không được làm hỏng request chính.
   }
 }
 
 // ============================================================
-// AUTH — REGISTER
+// AUTH - REGISTER
 // ============================================================
 
 async function register(request, env) {
-  const data = await bodyJSON(request);
+  let data;
 
-  if (!data) {
+  try {
+    data = await bodyJSON(request);
+  } catch {
     return fail(
-      "Dữ liệu gửi lên không hợp lệ.",
+      "Dữ liệu đăng ký không hợp lệ.",
       400,
       "INVALID_JSON"
     );
@@ -567,26 +381,21 @@ async function register(request, env) {
   }
 
   try {
-    const columns = await getColumns(
-      env,
-      "users"
-    );
-
     // --------------------------------------------------------
-    // Kiểm tra email
+    // Kiểm tra tài khoản đã tồn tại
     // --------------------------------------------------------
 
-    const exists = await env.DB
+    const existing = await env.DB
       .prepare(`
         SELECT id
         FROM users
-        WHERE lower(email) = ?
+        WHERE email = ?
         LIMIT 1
       `)
       .bind(email)
       .first();
 
-    if (exists) {
+    if (existing) {
       return fail(
         "Email này đã được đăng ký.",
         409,
@@ -598,135 +407,122 @@ async function register(request, env) {
     // Hash password
     // --------------------------------------------------------
 
-    const hashed = await hashPassword(password);
+    const {
+      passwordHash,
+      passwordSalt
+    } = await createPasswordHash(password);
 
     // --------------------------------------------------------
-    // Role tương thích DB
+    // Kiểm tra schema hiện tại
     // --------------------------------------------------------
 
-    const role = await getDefaultUserRole(env);
+    const columns = await getUserColumns(env);
 
-    // --------------------------------------------------------
-    // Tạo INSERT động theo schema thực tế
-    // --------------------------------------------------------
+    const hasSalt = columns.has("password_salt");
+    const hasRole = columns.has("role");
 
-    const fields = [];
-    const values = [];
+    let result;
 
-    if (columns.has("email")) {
-      fields.push("email");
-      values.push(email);
+    /*
+      QUAN TRỌNG:
+
+      Database hiện tại của bạn có role CHECK:
+
+      ('PLAYER', 'ADMIN', 'SUPER_ADMIN')
+
+      nên tài khoản người dùng bình thường phải là PLAYER,
+      KHÔNG được insert USER.
+    */
+
+    if (hasSalt && hasRole) {
+      result = await env.DB
+        .prepare(`
+          INSERT INTO users
+            (email, password_hash, password_salt, role)
+          VALUES (?, ?, ?, ?)
+        `)
+        .bind(
+          email,
+          passwordHash,
+          passwordSalt,
+          "PLAYER"
+        )
+        .run();
+
+    } else if (hasSalt) {
+      result = await env.DB
+        .prepare(`
+          INSERT INTO users
+            (email, password_hash, password_salt)
+          VALUES (?, ?, ?)
+        `)
+        .bind(
+          email,
+          passwordHash,
+          passwordSalt
+        )
+        .run();
+
+    } else if (hasRole) {
+      /*
+        Trường hợp database cũ không có password_salt.
+        Không lý tưởng nhưng vẫn tương thích schema.
+      */
+
+      result = await env.DB
+        .prepare(`
+          INSERT INTO users
+            (email, password_hash, role)
+          VALUES (?, ?, ?)
+        `)
+        .bind(
+          email,
+          passwordHash,
+          "PLAYER"
+        )
+        .run();
+
     } else {
-      return fail(
-        "Database users thiếu cột email.",
-        500,
-        "DB_SCHEMA_ERROR"
-      );
+      result = await env.DB
+        .prepare(`
+          INSERT INTO users
+            (email, password_hash)
+          VALUES (?, ?)
+        `)
+        .bind(
+          email,
+          passwordHash
+        )
+        .run();
     }
 
-    if (columns.has("password_hash")) {
-      fields.push("password_hash");
-      values.push(hashed.hash);
-    } else {
-      return fail(
-        "Database users thiếu cột password_hash.",
-        500,
-        "DB_SCHEMA_ERROR"
-      );
-    }
-
-    // --------------------------------------------------------
-    // password_salt:
-    //
-    // Có cột -> lưu salt riêng.
-    //
-    // Không có cột -> nhúng salt vào password_hash.
-    // --------------------------------------------------------
-
-    let finalPasswordHash = hashed.hash;
-
-    if (columns.has("password_salt")) {
-      fields.push("password_salt");
-      values.push(hashed.salt);
-    } else {
-      finalPasswordHash =
-        `pbkdf2$${PBKDF2_ITERATIONS}$${hashed.salt}$${hashed.hash}`;
-
-      values[
-        fields.indexOf("password_hash")
-      ] = finalPasswordHash;
-    }
-
-    // --------------------------------------------------------
-    // role
-    // --------------------------------------------------------
-
-    if (columns.has("role")) {
-      fields.push("role");
-      values.push(role);
-    }
-
-    // --------------------------------------------------------
-    // created_at chỉ thêm nếu cần.
-    // Nếu DB có DEFAULT thì bỏ qua.
-    // --------------------------------------------------------
-
-    const placeholders =
-      fields.map(() => "?").join(", ");
-
-    const query = `
-      INSERT INTO users
-      (${fields.map(x => `"${x}"`).join(", ")})
-      VALUES (${placeholders})
-    `;
-
-    const result = await env.DB
-      .prepare(query)
-      .bind(...values)
-      .run();
-
-    const userId =
-      result.meta?.last_row_id;
+    const userId = result.meta?.last_row_id;
 
     await audit(
       env,
       userId,
       "REGISTER",
-      `user:${userId}`,
-      { email }
-    );
-
-    // --------------------------------------------------------
-    // Không tự đăng nhập.
-    // User đăng ký xong sẽ được chuyển sang login.
-    // --------------------------------------------------------
-
-    return ok(
+      "users",
       {
-        message:
-          "Tạo tài khoản thành công. Hãy đăng nhập để tiếp tục.",
-        user: {
-          id: userId,
-          email,
-          role: publicRole(role)
-        }
-      },
-      201
+        email
+      }
     );
+
+    return ok({
+      message: "Tạo tài khoản thành công!",
+      user: {
+        id: userId,
+        email,
+        role: "PLAYER"
+      }
+    });
 
   } catch (error) {
-    const message = String(
-      error?.message || error
-    );
-
-    console.error(
-      "REGISTER ERROR:",
-      message
-    );
+    const message = String(error?.message || error);
 
     if (
-      /UNIQUE/i.test(message) &&
-      /email/i.test(message)
+      message.includes("UNIQUE") ||
+      message.includes("users.email")
     ) {
       return fail(
         "Email này đã được đăng ký.",
@@ -735,8 +531,24 @@ async function register(request, env) {
       );
     }
 
+    if (message.includes("password_salt")) {
+      return fail(
+        "Database hiện tại yêu cầu password_salt nhưng cấu trúc users chưa đồng bộ.",
+        500,
+        "PASSWORD_SALT_SCHEMA"
+      );
+    }
+
+    if (message.includes("role")) {
+      return fail(
+        "Role không tương thích với database hiện tại.",
+        500,
+        "ROLE_SCHEMA"
+      );
+    }
+
     return fail(
-      `Không thể tạo tài khoản: ${message}`,
+      "Không thể tạo tài khoản: " + message,
       500,
       "REGISTER_FAILED"
     );
@@ -744,15 +556,17 @@ async function register(request, env) {
 }
 
 // ============================================================
-// AUTH — LOGIN
+// AUTH - LOGIN
 // ============================================================
 
 async function login(request, env) {
-  const data = await bodyJSON(request);
+  let data;
 
-  if (!data) {
+  try {
+    data = await bodyJSON(request);
+  } catch {
     return fail(
-      "Dữ liệu gửi lên không hợp lệ.",
+      "Dữ liệu đăng nhập không hợp lệ.",
       400,
       "INVALID_JSON"
     );
@@ -778,125 +592,126 @@ async function login(request, env) {
   }
 
   try {
-    const columns = await getColumns(
-      env,
-      "users"
-    );
+    const columns = await getUserColumns(env);
 
-    const saltColumn =
-      columns.has("password_salt")
-        ? "password_salt"
-        : null;
+    const hasSalt = columns.has("password_salt");
+    const hasRole = columns.has("role");
 
-    const selectFields = [
-      "id",
-      "email",
-      "password_hash",
-      "role"
-    ];
+    const selectSalt = hasSalt
+      ? ", password_salt"
+      : "";
 
-    if (saltColumn) {
-      selectFields.push("password_salt");
-    }
+    const selectRole = hasRole
+      ? ", role"
+      : "";
 
     const user = await env.DB
       .prepare(`
-        SELECT ${selectFields
-          .map(x => `"${x}"`)
-          .join(", ")}
+        SELECT
+          id,
+          email,
+          password_hash
+          ${selectSalt}
+          ${selectRole}
         FROM users
-        WHERE lower(email) = ?
+        WHERE email = ?
         LIMIT 1
       `)
       .bind(email)
       .first();
 
     if (!user) {
-      await audit(
-        env,
-        null,
-        "LOGIN_FAILED",
-        null,
-        { email, reason: "USER_NOT_FOUND" }
-      );
-
       return fail(
-        "Email hoặc mật khẩu không chính xác.",
+        "Email hoặc mật khẩu không đúng.",
         401,
         "INVALID_CREDENTIALS"
       );
     }
 
-    const valid = await verifyPassword(
-      password,
-      user.password_hash,
-      saltColumn
-        ? user.password_salt
-        : null
-    );
+    let passwordOK = false;
 
-    if (!valid) {
+    if (hasSalt) {
+      passwordOK = await verifyPassword(
+        password,
+        user.password_hash,
+        user.password_salt
+      );
+    }
+
+    if (!passwordOK) {
       await audit(
         env,
         user.id,
         "LOGIN_FAILED",
-        `user:${user.id}`,
-        { reason: "BAD_PASSWORD" }
+        "users",
+        {
+          email
+        }
       );
 
       return fail(
-        "Email hoặc mật khẩu không chính xác.",
+        "Email hoặc mật khẩu không đúng.",
         401,
         "INVALID_CREDENTIALS"
       );
     }
 
     // --------------------------------------------------------
-    // Session tự tương thích token/session_token
+    // Xóa session cũ của user
     // --------------------------------------------------------
 
-    const session =
-      await createSession(
-        env,
-        user.id
-      );
+    await env.DB
+      .prepare(`
+        DELETE FROM sessions
+        WHERE user_id = ?
+      `)
+      .bind(user.id)
+      .run();
+
+    // --------------------------------------------------------
+    // Tạo session mới
+    // --------------------------------------------------------
+
+    const session = await createSession(
+      env,
+      user.id
+    );
+
+    const role = user.role || "PLAYER";
 
     await audit(
       env,
       user.id,
       "LOGIN",
-      `user:${user.id}`,
-      { email: user.email }
-    );
-
-    const response = ok({
-      message: "Đăng nhập thành công!",
-      user: {
-        id: user.id,
-        email: user.email,
-        role: publicRole(user.role)
+      "users",
+      {
+        email
       }
-    });
-
-    response.headers.append(
-      "Set-Cookie",
-      sessionCookie(session.token)
     );
 
-    return response;
+    return ok(
+      {
+        message: "Đăng nhập thành công!",
+        user: {
+          id: user.id,
+          email: user.email,
+          role
+        },
+        expires_at: session.expiresAt
+      },
+      200,
+      {
+        "Set-Cookie": sessionCookie(
+          session.token,
+          request
+        )
+      }
+    );
 
   } catch (error) {
-    const message = String(
-      error?.message || error
-    );
-
-    console.error(
-      "LOGIN ERROR:",
-      message
-    );
-
     return fail(
-      `Không thể đăng nhập: ${message}`,
+      "Không thể đăng nhập: " +
+      String(error?.message || error),
       500,
       "LOGIN_FAILED"
     );
@@ -904,72 +719,87 @@ async function login(request, env) {
 }
 
 // ============================================================
-// AUTH — ME
+// AUTH - ME
 // ============================================================
 
 async function me(request, env) {
-  try {
-    const user =
-      await getCurrentUser(
-        request,
-        env
-      );
+  const session = await getSession(
+    request,
+    env
+  );
 
+  if (!session) {
     return ok({
-      authenticated: !!user,
-      user: user || null
+      authenticated: false,
+      user: null
     });
-  } catch (error) {
-    return fail(
-      error.message,
-      500,
-      "ME_FAILED"
-    );
   }
+
+  return ok({
+    authenticated: true,
+    user: {
+      id: session.id,
+      email: session.email,
+      role: session.role
+    },
+    expires_at: session.expires_at
+  });
 }
 
 // ============================================================
-// AUTH — LOGOUT
+// AUTH - LOGOUT
 // ============================================================
 
 async function logout(request, env) {
-  try {
-    const token =
-      getCookie(request, "session");
+  const token = getCookie(
+    request,
+    "session"
+  );
 
-    if (token) {
-      const tokenColumn =
-        await getSessionTokenColumn(env);
+  if (token) {
+    try {
+      const session = await env.DB
+        .prepare(`
+          SELECT user_id
+          FROM sessions
+          WHERE token = ?
+          LIMIT 1
+        `)
+        .bind(token)
+        .first();
 
-      if (tokenColumn) {
-        await env.DB
-          .prepare(`
-            DELETE FROM sessions
-            WHERE "${tokenColumn}" = ?
-          `)
-          .bind(token)
-          .run();
+      await env.DB
+        .prepare(`
+          DELETE FROM sessions
+          WHERE token = ?
+        `)
+        .bind(token)
+        .run();
+
+      if (session) {
+        await audit(
+          env,
+          session.user_id,
+          "LOGOUT",
+          "sessions"
+        );
       }
+    } catch {
+      // Cookie vẫn được xóa phía client.
     }
-
-    const response = ok({
-      message: "Đã đăng xuất thành công."
-    });
-
-    response.headers.append(
-      "Set-Cookie",
-      clearSessionCookie()
-    );
-
-    return response;
-
-  } catch (error) {
-    return fail(
-      error.message,
-      500,
-      "LOGOUT_FAILED"
-    );
   }
+
+  return ok(
+    {
+      message: "Đã đăng xuất."
+    },
+    200,
+    {
+      "Set-Cookie": clearSessionCookie(
+        request
+      )
+    }
+  );
 }
 
 // ============================================================
@@ -988,14 +818,12 @@ async function health(env) {
         result?.ok === 1
           ? "connected"
           : "error",
-      site:
-        env.SITE_NAME ||
-        "CUSTOM 151"
+      site: env.SITE_NAME || "CUSTOM 151"
     });
 
   } catch (error) {
     return fail(
-      error.message,
+      String(error?.message || error),
       500,
       "DATABASE_ERROR"
     );
@@ -1013,19 +841,18 @@ async function tables(env) {
         SELECT name
         FROM sqlite_master
         WHERE type = 'table'
-        AND name NOT LIKE 'sqlite_%'
+          AND name NOT LIKE 'sqlite_%'
         ORDER BY name
       `)
       .all();
 
     return ok({
-      tables:
-        result.results || []
+      tables: result.results || []
     });
 
   } catch (error) {
     return fail(
-      error.message,
+      String(error?.message || error),
       500,
       "TABLES_FAILED"
     );
@@ -1033,7 +860,7 @@ async function tables(env) {
 }
 
 // ============================================================
-// TABLE DATA
+// TABLE
 // ============================================================
 
 async function table(request, env) {
@@ -1072,7 +899,7 @@ async function table(request, env) {
 
   } catch (error) {
     return fail(
-      error.message,
+      String(error?.message || error),
       500,
       "TABLE_READ_FAILED"
     );
@@ -1080,7 +907,7 @@ async function table(request, env) {
 }
 
 // ============================================================
-// TOURNAMENTS — PUBLIC
+// TOURNAMENTS
 // ============================================================
 
 async function tournaments(env) {
@@ -1102,13 +929,12 @@ async function tournaments(env) {
       .all();
 
     return ok({
-      tournaments:
-        result.results || []
+      tournaments: result.results || []
     });
 
   } catch (error) {
     return fail(
-      error.message,
+      String(error?.message || error),
       500,
       "TOURNAMENTS_FAILED"
     );
@@ -1116,7 +942,7 @@ async function tournaments(env) {
 }
 
 // ============================================================
-// RANKING — PUBLIC
+// RANKING
 // ============================================================
 
 async function ranking(env) {
@@ -1124,33 +950,31 @@ async function ranking(env) {
     const result = await env.DB
       .prepare(`
         SELECT
-          t.id,
-          t.name,
-          COALESCE(SUM(r.kills), 0) AS kills,
-          COALESCE(SUM(r.points), 0) AS points
-        FROM teams t
-        LEFT JOIN results r
-          ON r.team_id = t.id
-        GROUP BY t.id, t.name
-        HAVING
-          COALESCE(SUM(r.points), 0) > 0
-          OR COALESCE(SUM(r.kills), 0) > 0
+          teams.id,
+          teams.name,
+          COALESCE(SUM(results.kills), 0) AS kills,
+          COALESCE(SUM(results.points), 0) AS points
+        FROM teams
+        LEFT JOIN results
+          ON results.team_id = teams.id
+        GROUP BY
+          teams.id,
+          teams.name
         ORDER BY
           points DESC,
           kills DESC,
-          t.id ASC
+          teams.id ASC
         LIMIT 100
       `)
       .all();
 
     return ok({
-      ranking:
-        result.results || []
+      ranking: result.results || []
     });
 
   } catch (error) {
     return fail(
-      error.message,
+      String(error?.message || error),
       500,
       "RANKING_FAILED"
     );
@@ -1158,145 +982,117 @@ async function ranking(env) {
 }
 
 // ============================================================
-// ROUTER
+// API ROUTER
+// ============================================================
+
+async function handleAPI(request, env) {
+  const url = new URL(request.url);
+
+  if (request.method === "GET" &&
+      url.pathname === "/api/health") {
+    return health(env);
+  }
+
+  if (request.method === "GET" &&
+      url.pathname === "/api/tables") {
+    return tables(env);
+  }
+
+  if (request.method === "GET" &&
+      url.pathname === "/api/table") {
+    return table(request, env);
+  }
+
+  // ----------------------------------------------------------
+  // AUTH
+  // ----------------------------------------------------------
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/register"
+  ) {
+    return register(request, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/login"
+  ) {
+    return login(request, env);
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/auth/me"
+  ) {
+    return me(request, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/logout"
+  ) {
+    return logout(request, env);
+  }
+
+  // ----------------------------------------------------------
+  // PUBLIC DATA
+  // ----------------------------------------------------------
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/tournaments"
+  ) {
+    return tournaments(env);
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/ranking"
+  ) {
+    return ranking(env);
+  }
+
+  return null;
+}
+
+// ============================================================
+// MAIN WORKER
 // ============================================================
 
 export default {
   async fetch(request, env) {
-    const url =
-      new URL(request.url);
-
-    const method =
-      request.method.toUpperCase();
+    const url = new URL(request.url);
 
     try {
-
-      // ======================================================
-      // HEALTH
-      // ======================================================
-
-      if (
-        url.pathname === "/api/health" &&
-        method === "GET"
-      ) {
-        return await health(env);
-      }
-
-      // ======================================================
-      // TABLES
-      // ======================================================
-
-      if (
-        url.pathname === "/api/tables" &&
-        method === "GET"
-      ) {
-        return await tables(env);
-      }
-
-      // ======================================================
-      // TABLE
-      // ======================================================
-
-      if (
-        url.pathname === "/api/table" &&
-        method === "GET"
-      ) {
-        return await table(
+      if (url.pathname.startsWith("/api/")) {
+        const response = await handleAPI(
           request,
           env
         );
-      }
 
-      // ======================================================
-      // AUTH REGISTER
-      // ======================================================
+        if (response) {
+          return response;
+        }
 
-      if (
-        url.pathname === "/api/auth/register" &&
-        method === "POST"
-      ) {
-        return await register(
-          request,
-          env
+        return fail(
+          "API không tồn tại.",
+          404,
+          "NOT_FOUND"
         );
       }
 
-      // ======================================================
-      // AUTH LOGIN
-      // ======================================================
-
-      if (
-        url.pathname === "/api/auth/login" &&
-        method === "POST"
-      ) {
-        return await login(
-          request,
-          env
-        );
-      }
-
-      // ======================================================
-      // AUTH ME
-      // ======================================================
-
-      if (
-        url.pathname === "/api/auth/me" &&
-        method === "GET"
-      ) {
-        return await me(
-          request,
-          env
-        );
-      }
-
-      // ======================================================
-      // AUTH LOGOUT
-      // ======================================================
-
-      if (
-        url.pathname === "/api/auth/logout" &&
-        method === "POST"
-      ) {
-        return await logout(
-          request,
-          env
-        );
-      }
-
-      // ======================================================
-      // TOURNAMENTS
-      // ======================================================
-
-      if (
-        url.pathname === "/api/tournaments" &&
-        method === "GET"
-      ) {
-        return await tournaments(env);
-      }
-
-      // ======================================================
-      // RANKING
-      // ======================================================
-
-      if (
-        url.pathname === "/api/ranking" &&
-        method === "GET"
-      ) {
-        return await ranking(env);
-      }
-
-      // ======================================================
-      // WEBSITE / ASSETS
-      // ======================================================
+      // ------------------------------------------------------
+      // STATIC WEBSITE
+      // ------------------------------------------------------
 
       if (env.ASSETS) {
         return env.ASSETS.fetch(request);
       }
 
       return new Response(
-        "CUSTOM 151 — Worker đang hoạt động.",
+        "CUSTOM 151",
         {
-          status: 200,
           headers: {
             "content-type":
               "text/plain; charset=UTF-8"
@@ -1305,18 +1101,11 @@ export default {
       );
 
     } catch (error) {
-
-      console.error(
-        "UNHANDLED ERROR:",
-        error
-      );
-
       return fail(
-        `Lỗi máy chủ: ${
-          error?.message || error
-        }`,
+        "Server error: " +
+        String(error?.message || error),
         500,
-        "INTERNAL_ERROR"
+        "SERVER_ERROR"
       );
     }
   }
