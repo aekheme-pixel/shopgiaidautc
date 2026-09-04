@@ -1,8 +1,8 @@
-name = "custom151"
-main = "src/index.js"
-compatibility_date = "2026-09-04"
+name = "vua-tu-chien-mua1"
 
-workers_dev = true
+main = "index.js"
+
+compatibility_date = "2026-09-04"
 
 [assets]
 directory = "./public"
@@ -12,7 +12,6 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "vua-tu-chien-mua1"
 database_id = "a767fa8a-7ae9-41ef-acd8-d7d214cb40bd"
-migrations_dir = "migrations"
 
 [vars]
 SITE_NAME = "GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1"
