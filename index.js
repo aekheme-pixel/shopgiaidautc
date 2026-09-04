@@ -1,1053 +1,1235 @@
-const json = (data, status=200) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers:{
-      "content-type":"application/json; charset=utf-8",
-      "cache-control":"no-store"
-    }
-  });
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-function b64u(bytes){
-  return btoa(
-    String.fromCharCode(...new Uint8Array(bytes))
-  )
-  .replace(/\+/g,"-")
-  .replace(/\//g,"_")
-  .replace(/=+$/,"");
-}
+  <title>Giải Đấu Vua Tử Chiến — Mùa 1</title>
 
-function unb64u(s){
-  s=s.replace(/-/g,"+").replace(/_/g,"/");
-  while(s.length%4)s+="=";
-  return Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-}
-
-async function hashPassword(password){
-
-  const salt=crypto.getRandomValues(
-    new Uint8Array(16)
-  );
-
-  const key=await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-
-  const bits=await crypto.subtle.deriveBits(
-    {
-      name:"PBKDF2",
-      salt,
-      iterations:150000,
-      hash:"SHA-256"
-    },
-    key,
-    256
-  );
-
-  return `pbkdf2$150000$${b64u(salt)}$${b64u(bits)}`;
-}
-
-async function verifyPassword(password,stored){
-
-  const [,it,saltS,hashS]=stored.split("$");
-
-  const key=await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-
-  const bits=await crypto.subtle.deriveBits(
-    {
-      name:"PBKDF2",
-      salt:unb64u(saltS),
-      iterations:Number(it),
-      hash:"SHA-256"
-    },
-    key,
-    256
-  );
-
-  return b64u(bits)===hashS;
-}
-
-async function sessionUser(request,env){
-
-  const token=
-    request.headers
-      .get("Authorization")
-      ?.replace(/^Bearer\s+/i,"")
-    ||
-    request.headers
-      .get("Cookie")
-      ?.match(/session=([^;]+)/)?.[1];
-
-  if(!token)
-    return null;
-
-  const row=await env.DB
-    .prepare(`
-      SELECT
-        u.id,
-        u.email,
-        u.role
-      FROM sessions s
-      JOIN users u ON u.id=s.user_id
-      WHERE s.token=?
-      AND s.expires_at>?
-    `)
-    .bind(token,Date.now())
-    .first();
-
-  return row
-    ? {...row,token}
-    : null;
-}
-
-async function requireAuth(req,env){
-
-  const u=await sessionUser(req,env);
-
-  if(!u)
-    throw new Response("Unauthorized",{status:401});
-
-  return u;
-}
-
-async function requireAdmin(req,env){
-
-  const u=await requireAuth(req,env);
-
-  if(
-    u.role!=="ADMIN" &&
-    u.role!=="SUPER_ADMIN"
-  )
-    throw new Response("Forbidden",{status:403});
-
-  return u;
-}
-
-function code(){
-
-  return "REG-"+
-    Date.now().toString(36).toUpperCase()+
-    "-"+
-    Math.random()
-      .toString(36)
-      .slice(2,7)
-      .toUpperCase();
-}
-
-async function api(req,env){
-
-  const url=new URL(req.url);
-  const path=url.pathname;
-  const method=req.method;
-
-  try{
-
-    if(path==="/api/health"){
-
-      return json({
-        ok:true,
-        time:new Date().toISOString()
-      });
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
-    if(
-      path==="/api/auth/register" &&
-      method==="POST"
-    ){
-
-      const {email,password}=await req.json();
-
-      if(
-        !email ||
-        !password ||
-        password.length<8
-      )
-        return json({
-          error:"Email và mật khẩu tối thiểu 8 ký tự"
-        },400);
-
-      const normalized=email.toLowerCase();
-
-      const existing=await env.DB
-        .prepare(
-          "SELECT id FROM users WHERE email=?"
-        )
-        .bind(normalized)
-        .first();
-
-      if(existing)
-        return json({
-          error:"Email đã tồn tại"
-        },409);
-
-      const h=await hashPassword(password);
-
-      const r=await env.DB
-        .prepare(`
-          INSERT INTO users
-          (email,password_hash)
-          VALUES(?,?)
-        `)
-        .bind(normalized,h)
-        .run();
-
-      return json({
-        ok:true,
-        userId:r.meta.last_row_id
-      },201);
+    body {
+      background: #070707;
+      color: #fff;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
-    if(
-      path==="/api/auth/login" &&
-      method==="POST"
-    ){
+    button,
+    input,
+    select {
+      font: inherit;
+    }
 
-      const {email,password}=await req.json();
+    button {
+      cursor: pointer;
+    }
 
-      const u=await env.DB
-        .prepare(
-          "SELECT * FROM users WHERE email=?"
-        )
-        .bind((email||"").toLowerCase())
-        .first();
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(7,7,7,.95);
+      border-bottom: 1px solid #292929;
+      backdrop-filter: blur(10px);
+    }
 
-      if(
-        !u ||
-        !(await verifyPassword(
-          password||"",
-          u.password_hash
-        ))
-      )
-        return json({
-          error:"Sai email hoặc mật khẩu"
-        },401);
+    .nav-container {
+      max-width: 1150px;
+      margin: auto;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-      const token=
-        crypto.randomUUID()+
-        crypto.randomUUID();
+    .logo {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
 
-      await env.DB
-        .prepare(`
-          INSERT INTO sessions
-          (token,user_id,expires_at)
-          VALUES(?,?,?)
-        `)
-        .bind(
-          token,
-          u.id,
-          Date.now()+30*24*3600*1000
-        )
-        .run();
+    .logo span {
+      color: #e50920;
+    }
 
-      return new Response(
-        JSON.stringify({
-          ok:true,
-          user:{
-            id:u.id,
-            email:u.email,
-            role:u.role
-          }
-        }),
+    .nav-links {
+      display: flex;
+      gap: 22px;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: #aaa;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .nav-links a:hover {
+      color: #fff;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-weight: 800;
+      color: white;
+    }
+
+    .btn-red {
+      background: #e50920;
+    }
+
+    .btn-red:hover {
+      background: #ff142d;
+    }
+
+    .btn-dark {
+      background: #151515;
+      border: 1px solid #333;
+    }
+
+    .hero {
+      max-width: 1150px;
+      margin: auto;
+      padding: 90px 20px 60px;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 8px 15px;
+      border: 1px solid #6b4f00;
+      border-radius: 6px;
+      color: #ffc400;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+
+    .hero h1 {
+      margin-top: 25px;
+      font-size: clamp(45px, 9vw, 92px);
+      line-height: .95;
+      font-weight: 1000;
+      letter-spacing: -4px;
+    }
+
+    .hero h1 span {
+      color: #e50920;
+    }
+
+    .hero p {
+      max-width: 700px;
+      margin: 25px auto;
+      color: #aaa;
+      font-size: 18px;
+      line-height: 1.7;
+    }
+
+    .hero-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .stats {
+      max-width: 1080px;
+      margin: auto;
+      display: grid;
+      grid-template-columns: repeat(4,1fr);
+      border: 1px solid #292929;
+      background: #111;
+    }
+
+    .stat {
+      padding: 25px;
+      text-align: center;
+      border-right: 1px solid #292929;
+    }
+
+    .stat:last-child {
+      border-right: 0;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 34px;
+      color: #e50920;
+    }
+
+    .stat small {
+      color: #888;
+    }
+
+    .section {
+      max-width: 1080px;
+      margin: auto;
+      padding: 70px 20px;
+    }
+
+    .section h2 {
+      font-size: 40px;
+      margin-bottom: 8px;
+    }
+
+    .section h2 span {
+      color: #e50920;
+    }
+
+    .subtitle {
+      color: #888;
+      margin-bottom: 25px;
+    }
+
+    .tournament-grid {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 16px;
+    }
+
+    .card {
+      background: #111;
+      border: 1px solid #292929;
+      border-radius: 12px;
+      padding: 22px;
+    }
+
+    .card h3 {
+      margin-bottom: 12px;
+      font-size: 20px;
+    }
+
+    .card p {
+      color: #999;
+      line-height: 1.5;
+    }
+
+    .fee {
+      margin: 18px 0;
+      color: #ffc400;
+      font-size: 27px;
+      font-weight: 900;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+    }
+
+    .modal-box {
+      width: min(520px,100%);
+      background: #131313;
+      border: 1px solid #333;
+      border-radius: 14px;
+      padding: 25px;
+    }
+
+    .modal-box h2 {
+      margin-bottom: 20px;
+    }
+
+    .close {
+      float: right;
+      background: #222;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 7px;
+      padding: 7px 10px;
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 7px;
+      color: #aaa;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 12px;
+      background: #080808;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 7px;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: #e50920;
+    }
+
+    .full {
+      width: 100%;
+      margin-top: 18px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    footer {
+      border-top: 1px solid #222;
+      padding: 40px 20px;
+      text-align: center;
+      color: #666;
+    }
+
+    @media(max-width:800px) {
+      .nav-links {
+        display: none;
+      }
+
+      .stats {
+        margin: 0 20px;
+        grid-template-columns: repeat(2,1fr);
+      }
+
+      .stat:nth-child(2) {
+        border-right: 0;
+      }
+
+      .stat:nth-child(3),
+      .stat:nth-child(4) {
+        border-top: 1px solid #292929;
+      }
+
+      .tournament-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        padding-top: 60px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header class="navbar">
+  <div class="nav-container">
+
+    <div class="logo">
+      VUA TỬ CHIẾN <span>01</span>
+    </div>
+
+    <nav class="nav-links">
+      <a href="#giai-dau">GIẢI ĐẤU</a>
+      <a href="#lich">LỊCH THI ĐẤU</a>
+      <a href="#bxh">XẾP HẠNG</a>
+      <button class="btn btn-red" onclick="openLogin()">
+        ĐĂNG NHẬP
+      </button>
+    </nav>
+
+  </div>
+</header>
+
+<main>
+
+<section class="hero">
+
+  <div class="badge">
+    FREE FIRE • GIẢI ĐẤU CỘNG ĐỒNG
+  </div>
+
+  <h1>
+    VUA TỬ CHIẾN
+    <span>MÙA 1</span>
+  </h1>
+
+  <p>
+    Nền tảng giải đấu Free Fire với hệ thống đăng ký đội,
+    thanh toán, duyệt đơn, lịch thi đấu và bảng xếp hạng.
+  </p>
+
+  <div class="hero-buttons">
+
+    <button
+      class="btn btn-red"
+      onclick="openLogin()"
+    >
+      ĐĂNG KÝ ĐỘI
+    </button>
+
+    <a
+      class="btn btn-dark"
+      href="#giai-dau"
+      style="text-decoration:none"
+    >
+      XEM GIẢI
+    </a>
+
+  </div>
+
+</section>
+
+
+<section class="stats">
+
+  <div class="stat">
+    <strong id="openTournament">0</strong>
+    <small>GIẢI ĐANG MỞ</small>
+  </div>
+
+  <div class="stat">
+    <strong id="teamCount">0</strong>
+    <small>ĐỘI CỦA BẠN</small>
+  </div>
+
+  <div class="stat">
+    <strong>24/7</strong>
+    <small>ONLINE</small>
+  </div>
+
+  <div class="stat">
+    <strong>LIVE</strong>
+    <small>CẬP NHẬT</small>
+  </div>
+
+</section>
+
+
+<section
+  class="section"
+  id="giai-dau"
+>
+
+  <h2>
+    GIẢI <span>ĐẤU</span>
+  </h2>
+
+  <p class="subtitle">
+    Đăng ký giải đấu Free Fire
+  </p>
+
+  <div
+    id="tournamentList"
+    class="tournament-grid"
+  >
+    <div class="card">
+      Đang tải giải đấu...
+    </div>
+  </div>
+
+</section>
+
+
+<section
+  class="section"
+  id="lich"
+>
+
+  <h2>
+    LỊCH <span>THI ĐẤU</span>
+  </h2>
+
+  <p class="subtitle">
+    Lịch thi đấu được cập nhật trực tiếp từ hệ thống.
+  </p>
+
+  <div class="card">
+
+    <p>
+      Lịch thi đấu sẽ xuất hiện sau khi ban tổ chức
+      mở bảng đấu.
+    </p>
+
+  </div>
+
+</section>
+
+
+<section
+  class="section"
+  id="bxh"
+>
+
+  <h2>
+    BẢNG <span>XẾP HẠNG</span>
+  </h2>
+
+  <p class="subtitle">
+    Thành tích các đội tuyển.
+  </p>
+
+  <div class="card">
+
+    <p>
+      Chưa có kết quả thi đấu.
+    </p>
+
+  </div>
+
+</section>
+
+</main>
+
+
+<footer>
+
+  GIẢI ĐẤU VUA TỬ CHIẾN — MÙA 1
+
+</footer>
+
+
+<div
+  id="modal"
+  class="modal hidden"
+>
+
+  <div class="modal-box">
+
+    <button
+      class="close"
+      onclick="closeModal()"
+    >
+      ✕
+    </button>
+
+    <div id="modalContent"></div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+const API = "/api";
+
+
+function closeModal() {
+
+  document
+    .getElementById("modal")
+    .classList.add("hidden");
+
+}
+
+
+function showModal(html) {
+
+  document
+    .getElementById("modalContent")
+    .innerHTML = html;
+
+  document
+    .getElementById("modal")
+    .classList.remove("hidden");
+
+}
+
+
+function openLogin() {
+
+  showModal(`
+
+    <h2>Đăng nhập</h2>
+
+    <form onsubmit="login(event)">
+
+      <label>Email</label>
+
+      <input
+        id="loginEmail"
+        type="email"
+        required
+      >
+
+      <label>Mật khẩu</label>
+
+      <input
+        id="loginPassword"
+        type="password"
+        required
+      >
+
+      <button
+        class="btn btn-red full"
+      >
+        ĐĂNG NHẬP
+      </button>
+
+    </form>
+
+    <p style="
+      margin-top:15px;
+      color:#888
+    ">
+      Chưa có tài khoản?
+      <a
+        href="#"
+        onclick="openRegister()"
+        style="color:#e50920"
+      >
+        Đăng ký
+      </a>
+    </p>
+
+  `);
+
+}
+
+
+function openRegister() {
+
+  showModal(`
+
+    <h2>Tạo tài khoản</h2>
+
+    <form onsubmit="register(event)">
+
+      <label>Email</label>
+
+      <input
+        id="registerEmail"
+        type="email"
+        required
+      >
+
+      <label>Mật khẩu</label>
+
+      <input
+        id="registerPassword"
+        type="password"
+        minlength="8"
+        required
+      >
+
+      <button
+        class="btn btn-red full"
+      >
+        TẠO TÀI KHOẢN
+      </button>
+
+    </form>
+
+  `);
+
+}
+
+
+async function apiFetch(
+  path,
+  options = {}
+) {
+
+  const response =
+    await fetch(
+      API + path,
+      {
+        ...options,
+        headers: {
+          "Content-Type":
+            "application/json",
+          ...(options.headers || {})
+        }
+      }
+    );
+
+  const data =
+    await response
+      .json()
+      .catch(() => ({}));
+
+  if (!response.ok) {
+
+    throw new Error(
+      data.error ||
+      "Có lỗi xảy ra."
+    );
+
+  }
+
+  return data;
+
+}
+
+
+async function register(event) {
+
+  event.preventDefault();
+
+  try {
+
+    await apiFetch(
+      "/auth/register",
+      {
+        method:"POST",
+
+        body:JSON.stringify({
+          email:
+            document
+              .getElementById(
+                "registerEmail"
+              ).value,
+
+          password:
+            document
+              .getElementById(
+                "registerPassword"
+              ).value
+        })
+      }
+    );
+
+    alert(
+      "Tạo tài khoản thành công!"
+    );
+
+    openLogin();
+
+  }
+
+  catch(error) {
+
+    alert(error.message);
+
+  }
+
+}
+
+
+async function login(event) {
+
+  event.preventDefault();
+
+  try {
+
+    const data =
+      await apiFetch(
+        "/auth/login",
         {
-          headers:{
-            "content-type":
-              "application/json",
-            "Set-Cookie":
-              `session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`
-          }
+          method:"POST",
+
+          body:JSON.stringify({
+            email:
+              document
+                .getElementById(
+                  "loginEmail"
+                ).value,
+
+            password:
+              document
+                .getElementById(
+                  "loginPassword"
+                ).value
+          })
         }
       );
-    }
 
-    if(path==="/api/auth/me"){
+    closeModal();
 
-      const u=await sessionUser(req,env);
+    if (
+      data.user.role === "ADMIN" ||
+      data.user.role === "SUPER_ADMIN"
+    ) {
 
-      return json({
-        user:u
-          ? {
-              id:u.id,
-              email:u.email,
-              role:u.role
-            }
-          : null
-      });
-    }
+      window.location.href =
+        "/admin.html";
 
-    if(path==="/api/auth/logout"){
+    } else {
 
-      const u=await sessionUser(req,env);
-
-      if(u){
-
-        await env.DB
-          .prepare(
-            "DELETE FROM sessions WHERE token=?"
-          )
-          .bind(u.token)
-          .run();
-      }
-
-      return new Response(null,{
-        status:204,
-        headers:{
-          "Set-Cookie":
-            "session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0"
-        }
-      });
-    }
-
-    if(
-      path==="/api/tournaments" &&
-      method==="GET"
-    ){
-
-      const rows=await env.DB
-        .prepare(
-          "SELECT * FROM tournaments ORDER BY id DESC"
-        )
-        .all();
-
-      return json({
-        tournaments:rows.results
-      });
-    }
-
-    if(
-      path==="/api/tournaments" &&
-      method==="POST"
-    ){
-
-      const u=await requireAdmin(req,env);
-      const b=await req.json();
-
-      if(!b.name)
-        return json({
-          error:"Tên giải là bắt buộc"
-        },400);
-
-      const r=await env.DB
-        .prepare(`
-          INSERT INTO tournaments
-          (name,fee,max_teams,description)
-          VALUES(?,?,?,?)
-        `)
-        .bind(
-          b.name,
-          Number(b.fee||0),
-          Number(b.max_teams||48),
-          b.description||""
-        )
-        .run();
-
-      await env.DB
-        .prepare(`
-          INSERT INTO audit_logs
-          (user_id,action,target,details)
-          VALUES(?,?,?,?)
-        `)
-        .bind(
-          u.id,
-          "CREATE_TOURNAMENT",
-          String(r.meta.last_row_id),
-          JSON.stringify(b)
-        )
-        .run();
-
-      return json({
-        id:r.meta.last_row_id
-      },201);
-    }
-
-    if(
-      path==="/api/slots" &&
-      method==="GET"
-    ){
-
-      const tid=
-        url.searchParams.get(
-          "tournament_id"
-        );
-
-      const rows=await env.DB
-        .prepare(`
-          SELECT *
-          FROM slots
-          WHERE tournament_id=?
-          ORDER BY slot_time
-        `)
-        .bind(tid)
-        .all();
-
-      return json({
-        slots:rows.results
-      });
-    }
-
-    if(
-      path==="/api/slots" &&
-      method==="POST"
-    ){
-
-      await requireAdmin(req,env);
-
-      const b=await req.json();
-
-      const r=await env.DB
-        .prepare(`
-          INSERT INTO slots
-          (tournament_id,slot_time,group_name,capacity)
-          VALUES(?,?,?,?)
-        `)
-        .bind(
-          b.tournament_id,
-          b.slot_time,
-          b.group_name,
-          b.capacity||12
-        )
-        .run();
-
-      return json({
-        id:r.meta.last_row_id
-      },201);
-    }
-
-    if(
-      path==="/api/teams" &&
-      method==="POST"
-    ){
-
-      const u=await requireAuth(req,env);
-      const b=await req.json();
-
-      if(
-        !b.name ||
-        !Array.isArray(b.members) ||
-        b.members.length<1
-      )
-        return json({
-          error:
-            "Tên đội và ít nhất 1 thành viên"
-        },400);
-
-      const r=await env.DB
-        .prepare(`
-          INSERT INTO teams
-          (owner_id,name,tag,logo_url)
-          VALUES(?,?,?,?)
-        `)
-        .bind(
-          u.id,
-          b.name,
-          b.tag||"",
-          b.logo_url||""
-        )
-        .run();
-
-      const tid=r.meta.last_row_id;
-
-      for(
-        const m of b.members.slice(0,5)
-      ){
-
-        if(!m.game_name || !m.uid)
-          continue;
-
-        await env.DB
-          .prepare(`
-            INSERT INTO team_members
-            (team_id,game_name,uid,role)
-            VALUES(?,?,?,?)
-          `)
-          .bind(
-            tid,
-            m.game_name,
-            m.uid,
-            m.role||"PLAYER"
-          )
-          .run();
-      }
-
-      return json({
-        id:tid
-      },201);
-    }
-
-    if(
-      path==="/api/teams" &&
-      method==="GET"
-    ){
-
-      const u=await requireAuth(req,env);
-
-      const rows=await env.DB
-        .prepare(`
-          SELECT *
-          FROM teams
-          WHERE owner_id=?
-          ORDER BY id DESC
-        `)
-        .bind(u.id)
-        .all();
-
-      return json({
-        teams:rows.results
-      });
-    }
-
-    if(
-      path==="/api/admin/teams" &&
-      method==="GET"
-    ){
-
-      await requireAdmin(req,env);
-
-      const rows=await env.DB
-        .prepare(`
-          SELECT
-            t.*,
-            u.email owner_email
-          FROM teams t
-          JOIN users u
-            ON u.id=t.owner_id
-          ORDER BY t.id DESC
-        `)
-        .all();
-
-      return json({
-        teams:rows.results
-      });
-    }
-
-    if(
-      path==="/api/admin/teams/status" &&
-      method==="POST"
-    ){
-
-      const u=await requireAdmin(req,env);
-      const b=await req.json();
-
-      const allowed=[
-        "PENDING",
-        "APPROVED",
-        "REJECTED"
-      ];
-
-      if(!allowed.includes(b.status))
-        return json({
-          error:"Trạng thái không hợp lệ"
-        },400);
-
-      await env.DB
-        .prepare(`
-          UPDATE teams
-          SET status=?
-          WHERE id=?
-        `)
-        .bind(
-          b.status,
-          b.team_id
-        )
-        .run();
-
-      await env.DB
-        .prepare(`
-          INSERT INTO audit_logs
-          (user_id,action,target,details)
-          VALUES(?,?,?,?)
-        `)
-        .bind(
-          u.id,
-          "UPDATE_TEAM_STATUS",
-          String(b.team_id),
-          JSON.stringify(b)
-        )
-        .run();
-
-      return json({ok:true});
-    }
-
-    if(
-      path==="/api/registrations" &&
-      method==="POST"
-    ){
-
-      const u=await requireAuth(req,env);
-      const b=await req.json();
-
-      const team=await env.DB
-        .prepare(`
-          SELECT *
-          FROM teams
-          WHERE id=?
-          AND owner_id=?
-        `)
-        .bind(
-          b.team_id,
-          u.id
-        )
-        .first();
-
-      const t=await env.DB
-        .prepare(`
-          SELECT *
-          FROM tournaments
-          WHERE id=?
-          AND status="OPEN"
-        `)
-        .bind(b.tournament_id)
-        .first();
-
-      if(!team || !t)
-        return json({
-          error:"Đội hoặc giải không hợp lệ"
-        },400);
-
-      const existing=await env.DB
-        .prepare(`
-          SELECT id
-          FROM registrations
-          WHERE team_id=?
-          AND tournament_id=?
-          AND status NOT IN
-          ("CANCELLED","REJECTED")
-        `)
-        .bind(
-          team.id,
-          t.id
-        )
-        .first();
-
-      if(existing)
-        return json({
-          error:"Đội đã đăng ký giải này"
-        },409);
-
-      const c=code();
-
-      const r=await env.DB
-        .prepare(`
-          INSERT INTO registrations
-          (team_id,tournament_id,slot_id,order_code,amount)
-          VALUES(?,?,?,?,?)
-        `)
-        .bind(
-          team.id,
-          t.id,
-          b.slot_id||null,
-          c,
-          t.fee
-        )
-        .run();
-
-      return json({
-        id:r.meta.last_row_id,
-        order_code:c,
-        amount:t.fee,
-        status:"AWAITING_PAYMENT"
-      },201);
-    }
-
-    if(
-      path==="/api/registrations" &&
-      method==="GET"
-    ){
-
-      const u=await requireAuth(req,env);
-
-      const rows=await env.DB
-        .prepare(`
-          SELECT
-            r.*,
-            t.name team_name,
-            tr.name tournament_name
-          FROM registrations r
-          JOIN teams t
-            ON t.id=r.team_id
-          JOIN tournaments tr
-            ON tr.id=r.tournament_id
-          WHERE t.owner_id=?
-          ORDER BY r.id DESC
-        `)
-        .bind(u.id)
-        .all();
-
-      return json({
-        registrations:rows.results
-      });
-    }
-
-    if(
-      path==="/api/payments" &&
-      method==="POST"
-    ){
-
-      const u=await requireAuth(req,env);
-      const b=await req.json();
-
-      const r=await env.DB
-        .prepare(`
-          SELECT
-            r.*
-          FROM registrations r
-          JOIN teams t
-            ON t.id=r.team_id
-          WHERE r.id=?
-          AND t.owner_id=?
-        `)
-        .bind(
-          b.registration_id,
-          u.id
-        )
-        .first();
-
-      if(!r)
-        return json({
-          error:"Đơn không hợp lệ"
-        },400);
-
-      const p=await env.DB
-        .prepare(`
-          INSERT INTO payments
-          (registration_id,amount,status)
-          VALUES(?,?,?)
-        `)
-        .bind(
-          r.id,
-          r.amount,
-          "PENDING"
-        )
-        .run();
-
-      return json({
-        id:p.meta.last_row_id,
-        order_code:r.order_code,
-        amount:r.amount,
-        status:"PENDING"
-      },201);
-    }
-
-    if(
-      path==="/api/admin/payments" &&
-      method==="GET"
-    ){
-
-      await requireAdmin(req,env);
-
-      const rows=await env.DB
-        .prepare(`
-          SELECT
-            p.*,
-            r.order_code,
-            t.name team_name,
-            tr.name tournament_name
-          FROM payments p
-          JOIN registrations r
-            ON r.id=p.registration_id
-          JOIN teams t
-            ON t.id=r.team_id
-          JOIN tournaments tr
-            ON tr.id=r.tournament_id
-          ORDER BY p.id DESC
-        `)
-        .all();
-
-      return json({
-        payments:rows.results
-      });
-    }
-
-    if(
-      path==="/api/admin/payments/status" &&
-      method==="POST"
-    ){
-
-      const u=await requireAdmin(req,env);
-      const b=await req.json();
-
-      const allowed=[
-        "PENDING",
-        "PAID",
-        "REJECTED"
-      ];
-
-      if(!allowed.includes(b.status))
-        return json({
-          error:"Trạng thái không hợp lệ"
-        },400);
-
-      await env.DB
-        .prepare(`
-          UPDATE payments
-          SET status=?
-          WHERE id=?
-        `)
-        .bind(
-          b.status,
-          b.payment_id
-        )
-        .run();
-
-      const p=await env.DB
-        .prepare(`
-          SELECT registration_id
-          FROM payments
-          WHERE id=?
-        `)
-        .bind(b.payment_id)
-        .first();
-
-      if(p){
-
-        const registrationStatus=
-          b.status==="PAID"
-            ?"PAID"
-            :b.status==="REJECTED"
-              ?"REJECTED"
-              :"AWAITING_PAYMENT";
-
-        await env.DB
-          .prepare(`
-            UPDATE registrations
-            SET status=?
-            WHERE id=?
-          `)
-          .bind(
-            registrationStatus,
-            p.registration_id
-          )
-          .run();
-      }
-
-      await env.DB
-        .prepare(`
-          INSERT INTO audit_logs
-          (user_id,action,target,details)
-          VALUES(?,?,?,?)
-        `)
-        .bind(
-          u.id,
-          "UPDATE_PAYMENT_STATUS",
-          String(b.payment_id),
-          JSON.stringify(b)
-        )
-        .run();
-
-      return json({
-        ok:true
-      });
-    }
-
-    /*
-      WEBHOOK NGÂN HÀNG
-
-      Đây là endpoint để kết nối provider
-      thanh toán thật sau khi cấu hình.
-    */
-
-    if(
-      path==="/api/webhooks/bank" &&
-      method==="POST"
-    ){
-
-      const secret=env.BANK_WEBHOOK_SECRET;
-
-      if(
-        secret &&
-        req.headers.get("x-webhook-secret")!==secret
-      )
-        return json({
-          error:"Invalid webhook secret"
-        },401);
-
-      const b=await req.json();
-
-      const content=
-        (b.description||b.content||"")+
-        " "+
-        (b.referenceCode||b.code||"");
-
-      const m=
-        content.match(/REG-[A-Z0-9-]+/i);
-
-      if(!m)
-        return json({
-          ok:true,
-          matched:false
-        });
-
-      const order=m[0].toUpperCase();
-
-      const r=await env.DB
-        .prepare(`
-          SELECT *
-          FROM registrations
-          WHERE order_code=?
-        `)
-        .bind(order)
-        .first();
-
-      if(!r)
-        return json({
-          ok:true,
-          matched:false,
-          reason:"order_not_found"
-        });
-
-      const amount=Number(
-        b.amount ||
-        b.transferAmount ||
-        0
+      alert(
+        "Đăng nhập thành công!"
       );
 
-      if(amount<Number(r.amount))
-        return json({
-          ok:false,
-          reason:"amount_too_low"
-        },400);
+      loadData();
 
-      await env.DB
-        .prepare(`
-          INSERT INTO payments
-          (registration_id,external_id,amount,status,raw_json)
-          VALUES(?,?,?,?,?)
-        `)
-        .bind(
-          r.id,
-          String(
-            b.id ||
-            b.transactionId ||
-            ""
-          ),
-          amount,
-          "PAID",
-          JSON.stringify(b)
-        )
-        .run();
-
-      await env.DB
-        .prepare(`
-          UPDATE registrations
-          SET status="PAID"
-          WHERE id=?
-        `)
-        .bind(r.id)
-        .run();
-
-      return json({
-        ok:true,
-        matched:true,
-        registration_id:r.id
-      });
     }
 
-    /*
-      TẠO SUPER ADMIN LẦN ĐẦU
-    */
-
-    if(
-      path==="/api/admin/bootstrap" &&
-      method==="POST"
-    ){
-
-      if(!env.ADMIN_BOOTSTRAP_SECRET)
-        return json({
-          error:
-            "ADMIN_BOOTSTRAP_SECRET chưa cấu hình"
-        },503);
-
-      const b=await req.json();
-
-      if(
-        b.secret !==
-        env.ADMIN_BOOTSTRAP_SECRET
-      )
-        return json({
-          error:"Sai secret"
-        },403);
-
-      if(
-        !b.email ||
-        !b.password ||
-        b.password.length<8
-      )
-        return json({
-          error:"Thông tin admin không hợp lệ"
-        },400);
-
-      const email=b.email.toLowerCase();
-
-      const exists=await env.DB
-        .prepare(
-          "SELECT id FROM users WHERE email=?"
-        )
-        .bind(email)
-        .first();
-
-      if(exists)
-        return json({
-          error:"Email đã tồn tại"
-        },409);
-
-      const h=
-        await hashPassword(b.password);
-
-      const r=await env.DB
-        .prepare(`
-          INSERT INTO users
-          (email,password_hash,role)
-          VALUES(?,?,?)
-        `)
-        .bind(
-          email,
-          h,
-          "SUPER_ADMIN"
-        )
-        .run();
-
-      return json({
-        ok:true,
-        id:r.meta.last_row_id
-      },201);
-    }
-
-    return json({
-      error:"Not found"
-    },404);
-
-  }catch(e){
-
-    if(e instanceof Response)
-      return e;
-
-    return json({
-      error:String(
-        e?.message||e
-      )
-    },500);
   }
+
+  catch(error) {
+
+    alert(error.message);
+
+  }
+
 }
 
-export default {
 
-  async fetch(req,env){
+async function loadData() {
 
-    const url=new URL(req.url);
+  try {
 
-    if(
-      url.pathname.startsWith("/api/")
-    )
-      return api(req,env);
+    const data =
+      await apiFetch(
+        "/tournaments"
+      );
 
-    return env.ASSETS.fetch(req);
+    const tournaments =
+      data.tournaments || [];
+
+    const open =
+      tournaments.filter(
+        x => x.status === "OPEN"
+      );
+
+    document
+      .getElementById(
+        "openTournament"
+      )
+      .textContent =
+      open.length;
+
+    const container =
+      document.getElementById(
+        "tournamentList"
+      );
+
+    if (!tournaments.length) {
+
+      container.innerHTML = `
+
+        <div class="card">
+
+          <h3>
+            Vua Tử Chiến — Mùa 1
+          </h3>
+
+          <p>
+            Ban tổ chức chưa mở đăng ký.
+          </p>
+
+        </div>
+
+      `;
+
+      return;
+
+    }
+
+    container.innerHTML =
+      tournaments.map(
+        tournament => `
+
+          <article class="card">
+
+            <h3>
+              ${escapeHtml(
+                tournament.name
+              )}
+            </h3>
+
+            <p>
+              ${escapeHtml(
+                tournament.description ||
+                "Giải đấu Free Fire"
+              )}
+            </p>
+
+            <div class="fee">
+
+              ${Number(
+                tournament.fee || 0
+              ).toLocaleString(
+                "vi-VN"
+              )}đ
+
+            </div>
+
+            <p style="margin-bottom:15px">
+
+              Tối đa
+              ${tournament.max_teams}
+              đội
+
+            </p>
+
+            <button
+              class="btn btn-red"
+              onclick="joinTournament(
+                ${tournament.id}
+              )"
+            >
+              ĐĂNG KÝ
+
+            </button>
+
+          </article>
+
+        `
+      ).join("");
+
   }
-};
+
+  catch(error) {
+
+    console.error(error);
+
+  }
+
+
+  try {
+
+    const me =
+      await apiFetch(
+        "/auth/me"
+      );
+
+    if (!me.user)
+      return;
+
+    const teams =
+      await apiFetch(
+        "/teams"
+      );
+
+    document
+      .getElementById(
+        "teamCount"
+      )
+      .textContent =
+      teams.teams.length;
+
+  }
+
+  catch(error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+async function joinTournament(
+  tournamentId
+) {
+
+  try {
+
+    const me =
+      await apiFetch(
+        "/auth/me"
+      );
+
+    if (!me.user) {
+
+      openLogin();
+
+      return;
+
+    }
+
+    const teams =
+      await apiFetch(
+        "/teams"
+      );
+
+    if (!teams.teams.length) {
+
+      showModal(`
+
+        <h2>Tạo đội tuyển</h2>
+
+        <form
+          onsubmit="
+            createTeam(
+              event,
+              ${tournamentId}
+            )
+          "
+        >
+
+          <label>
+            Tên đội
+          </label>
+
+          <input
+            id="teamName"
+            required
+          >
+
+          <label>
+            TAG
+          </label>
+
+          <input
+            id="teamTag"
+          >
+
+          <label>
+            Tên nhân vật
+          </label>
+
+          <input
+            id="gameName"
+            required
+          >
+
+          <label>
+            UID Free Fire
+          </label>
+
+          <input
+            id="gameUid"
+            required
+          >
+
+          <button
+            class="btn btn-red full"
+          >
+            TẠO ĐỘI & ĐĂNG KÝ
+          </button>
+
+        </form>
+
+      `);
+
+      return;
+
+    }
+
+    showModal(`
+
+      <h2>
+        Đăng ký giải đấu
+      </h2>
+
+      <label>
+        Chọn đội
+      </label>
+
+      <select id="selectedTeam">
+
+        ${teams.teams.map(
+          team => `
+
+            <option
+              value="${team.id}"
+            >
+              ${escapeHtml(
+                team.name
+              )}
+            </option>
+
+          `
+        ).join("")}
+
+      </select>
+
+      <button
+        class="btn btn-red full"
+        onclick="
+          submitRegistration(
+            ${tournamentId}
+          )
+        "
+      >
+        TIẾP TỤC
+      </button>
+
+    `);
+
+  }
+
+  catch(error) {
+
+    alert(error.message);
+
+  }
+
+}
+
+
+async function createTeam(
+  event,
+  tournamentId
+) {
+
+  event.preventDefault();
+
+  try {
+
+    const team =
+      await apiFetch(
+        "/teams",
+        {
+          method:"POST",
+
+          body:JSON.stringify({
+
+            name:
+              document
+                .getElementById(
+                  "teamName"
+                ).value,
+
+            tag:
+              document
+                .getElementById(
+                  "teamTag"
+                ).value,
+
+            members:[{
+
+              game_name:
+                document
+                  .getElementById(
+                    "gameName"
+                  ).value,
+
+              uid:
+                document
+                  .getElementById(
+                    "gameUid"
+                  ).value
+
+            }]
+
+          })
+        }
+      );
+
+    await submitRegistration(
+      tournamentId,
+      team.id
+    );
+
+  }
+
+  catch(error) {
+
+    alert(error.message);
+
+  }
+
+}
+
+
+async function submitRegistration(
+  tournamentId,
+  forcedTeamId = null
+) {
+
+  try {
+
+    const teamId =
+      forcedTeamId ||
+      Number(
+        document
+          .getElementById(
+            "selectedTeam"
+          ).value
+      );
+
+    const order =
+      await apiFetch(
+        "/registrations",
+        {
+          method:"POST",
+
+          body:JSON.stringify({
+
+            team_id:
+              teamId,
+
+            tournament_id:
+              tournamentId
+
+          })
+        }
+      );
+
+    showModal(`
+
+      <h2>
+        ĐƠN ĐĂNG KÝ
+      </h2>
+
+      <p style="color:#aaa">
+        Mã đơn:
+      </p>
+
+      <h3 style="
+        margin:8px 0;
+        color:#ffc400
+      ">
+        ${escapeHtml(
+          order.order_code
+        )}
+      </h3>
+
+      <p style="
+        color:#aaa;
+        margin-top:15px
+      ">
+        Số tiền:
+      </p>
+
+      <h2>
+        ${Number(
+          order.amount
+        ).toLocaleString(
+          "vi-VN"
+        )}đ
+      </h2>
+
+      <p style="
+        color:#888;
+        margin-top:15px;
+        line-height:1.5
+      ">
+        Hệ thống đã tạo đơn.
+        Tiếp theo bạn sẽ thực hiện
+        thanh toán theo thông tin
+        tài khoản của ban tổ chức.
+      </p>
+
+    `);
+
+  }
+
+  catch(error) {
+
+    alert(error.message);
+
+  }
+
+}
+
+
+function escapeHtml(value) {
+
+  return String(
+    value ?? ""
+  ).replace(
+    /[&<>"']/g,
+    character => ({
+
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      '"':"&quot;",
+      "'":"&#039;"
+
+    }[character])
+  );
+
+}
+
+
+loadData();
+
+</script>
+
+</body>
+</html>
