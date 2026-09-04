@@ -6,13 +6,9 @@
 
 <title>CUSTOM 151 — Free Fire Tournament</title>
 
-<meta
-  name="theme-color"
-  content="#070708"
->
+<meta name="theme-color" content="#070708">
 
 <style>
-
 *{
   box-sizing:border-box;
 }
@@ -25,14 +21,7 @@ body{
   margin:0;
   background:#070708;
   color:#f4f4f5;
-  font-family:
-    Arial,
-    Helvetica,
-    sans-serif;
-}
-
-body.modal-open{
-  overflow:hidden;
+  font-family:Arial,Helvetica,sans-serif;
 }
 
 a{
@@ -51,23 +40,19 @@ button{
   cursor:pointer;
 }
 
-/* =========================================================
-   HEADER
-========================================================= */
-
 .top{
   position:sticky;
   top:0;
   z-index:50;
-  background:rgba(8,8,9,.92);
+  background:#080809ee;
   border-bottom:1px solid #252529;
-  backdrop-filter:blur(18px);
+  backdrop-filter:blur(14px);
 }
 
 .nav{
   max-width:1180px;
   margin:auto;
-  padding:16px 22px;
+  padding:18px 22px;
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -75,7 +60,7 @@ button{
 }
 
 .brand{
-  font-weight:1000;
+  font-weight:900;
   letter-spacing:2px;
   font-size:20px;
 }
@@ -86,8 +71,8 @@ button{
 
 .navlinks{
   display:flex;
-  align-items:center;
   gap:20px;
+  align-items:center;
   color:#aaa;
 }
 
@@ -99,19 +84,12 @@ button{
   color:#fff;
 }
 
-/* =========================================================
-   BUTTONS
-========================================================= */
-
 .btn{
   border:0;
-  border-radius:10px;
+  border-radius:9px;
   padding:13px 20px;
-  font-weight:900;
-  transition:
-    transform .15s,
-    opacity .15s,
-    background .15s;
+  font-weight:800;
+  transition:.2s;
 }
 
 .btn:hover{
@@ -122,19 +100,9 @@ button{
   transform:translateY(0);
 }
 
-.btn:disabled{
-  opacity:.5;
-  cursor:not-allowed;
-  transform:none;
-}
-
 .red{
   background:#ed1b2f;
   color:white;
-}
-
-.red:hover{
-  background:#ff263b;
 }
 
 .ghost{
@@ -142,101 +110,6 @@ button{
   border:1px solid #2b2b30;
   color:white;
 }
-
-/* =========================================================
-   ACCOUNT BUTTON
-========================================================= */
-
-.account-wrap{
-  position:relative;
-}
-
-.account-btn{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  background:#111114;
-  border:1px solid #303036;
-  color:white;
-  border-radius:12px;
-  padding:8px 12px 8px 8px;
-  font-weight:800;
-}
-
-.avatar{
-  width:34px;
-  height:34px;
-  border-radius:50%;
-  display:grid;
-  place-items:center;
-  background:linear-gradient(
-    135deg,
-    #ed1b2f,
-    #8c0716
-  );
-  font-size:15px;
-  font-weight:1000;
-}
-
-.account-email{
-  max-width:150px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-
-.account-menu{
-  position:absolute;
-  right:0;
-  top:calc(100% + 10px);
-  width:260px;
-  background:#111114;
-  border:1px solid #303036;
-  border-radius:14px;
-  padding:8px;
-  box-shadow:
-    0 20px 60px #000b;
-}
-
-.account-info{
-  padding:12px;
-  border-bottom:1px solid #29292e;
-  margin-bottom:6px;
-}
-
-.account-info strong{
-  display:block;
-  margin-bottom:4px;
-}
-
-.account-info small{
-  color:#888;
-  word-break:break-all;
-}
-
-.account-item{
-  width:100%;
-  border:0;
-  background:transparent;
-  color:#ddd;
-  text-align:left;
-  padding:12px;
-  border-radius:9px;
-  font-weight:700;
-}
-
-.account-item:hover{
-  background:#1d1d21;
-  color:#fff;
-}
-
-.account-item.logout{
-  color:#ff5262;
-}
-
-/* =========================================================
-   HERO
-========================================================= */
 
 .hero{
   max-width:1180px;
@@ -286,10 +159,6 @@ button{
   flex-wrap:wrap;
 }
 
-/* =========================================================
-   STATS
-========================================================= */
-
 .stats{
   max-width:1120px;
   margin:0 auto 55px;
@@ -325,10 +194,6 @@ button{
   letter-spacing:1px;
 }
 
-/* =========================================================
-   SECTIONS
-========================================================= */
-
 .section{
   max-width:1120px;
   margin:auto;
@@ -348,9 +213,16 @@ button{
   color:#999;
 }
 
-/* =========================================================
-   CARDS
-========================================================= */
+.tabs{
+  display:flex;
+  gap:8px;
+  overflow:auto;
+  margin:22px 0;
+}
+
+.tab{
+  min-width:120px;
+}
 
 .cards{
   display:grid;
@@ -375,24 +247,44 @@ button{
   font-weight:900;
 }
 
-/* =========================================================
-   SCHEDULE
-========================================================= */
-
-.tabs{
-  display:flex;
-  gap:8px;
-  overflow:auto;
-  margin:22px 0;
+.form{
+  max-width:650px;
+  margin:30px auto;
+  background:#111216;
+  border:1px solid #292a2f;
+  border-radius:16px;
+  padding:22px;
 }
 
-.tab{
-  min-width:120px;
+.form label{
+  display:block;
+  color:#aaa;
+  margin:14px 0 6px;
 }
 
-/* =========================================================
-   TABLE
-========================================================= */
+.form input,
+.form textarea,
+.form select{
+  width:100%;
+  padding:13px;
+  border-radius:8px;
+  border:1px solid #34353b;
+  background:#09090b;
+  color:#fff;
+  outline:none;
+}
+
+.form input:focus,
+.form textarea:focus,
+.form select:focus{
+  border-color:#ed1b2f;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
 
 .tablewrap{
   overflow:auto;
@@ -411,243 +303,6 @@ button{
   white-space:nowrap;
 }
 
-/* =========================================================
-   MODAL
-========================================================= */
-
-#modal{
-  position:fixed;
-  inset:0;
-  z-index:100;
-}
-
-.modal-backdrop{
-  position:absolute;
-  inset:0;
-  background:#000c;
-  backdrop-filter:blur(8px);
-  display:grid;
-  place-items:center;
-  padding:20px;
-}
-
-.modal-box{
-  width:min(650px,100%);
-  max-height:90vh;
-  overflow:auto;
-  background:#111216;
-  border:1px solid #303138;
-  border-radius:20px;
-  padding:28px;
-  box-shadow:0 30px 100px #000;
-  position:relative;
-}
-
-.modal-close{
-  position:absolute;
-  right:18px;
-  top:18px;
-  width:44px;
-  height:44px;
-  border-radius:12px;
-  background:#111114;
-  border:1px solid #303036;
-  color:#fff;
-  font-size:22px;
-}
-
-.modal-title{
-  margin:0 55px 25px 0;
-  font-size:36px;
-}
-
-.form label{
-  display:block;
-  color:#aaa;
-  margin:16px 0 7px;
-  font-weight:700;
-}
-
-.form input,
-.form textarea,
-.form select{
-  width:100%;
-  padding:14px;
-  border-radius:10px;
-  border:1px solid #34353b;
-  background:#09090b;
-  color:#fff;
-  outline:none;
-}
-
-.form input:focus,
-.form textarea:focus,
-.form select:focus{
-  border-color:#ed1b2f;
-  box-shadow:0 0 0 3px #ed1b2f22;
-}
-
-.password-box{
-  position:relative;
-}
-
-.password-box input{
-  padding-right:52px;
-}
-
-.password-eye{
-  position:absolute;
-  right:8px;
-  top:50%;
-  transform:translateY(-50%);
-  width:40px;
-  height:40px;
-  border:0;
-  background:transparent;
-  color:#aaa;
-  font-size:19px;
-}
-
-.auth-submit{
-  width:100%;
-  margin-top:22px;
-  min-height:52px;
-  font-size:17px;
-}
-
-.auth-switch{
-  margin-top:20px;
-  color:#999;
-  text-align:center;
-}
-
-.auth-switch button{
-  border:0;
-  background:transparent;
-  color:#ff3348;
-  font-weight:900;
-}
-
-/* =========================================================
-   TOAST
-========================================================= */
-
-#toastContainer{
-  position:fixed;
-  z-index:300;
-  top:18px;
-  right:18px;
-  width:min(430px,calc(100vw - 36px));
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  pointer-events:none;
-}
-
-.toast{
-  pointer-events:auto;
-  background:#15161b;
-  border:1px solid #34353b;
-  border-radius:14px;
-  padding:15px 16px;
-  display:flex;
-  gap:12px;
-  align-items:flex-start;
-  box-shadow:0 18px 60px #000b;
-  animation:
-    toastIn .25s ease;
-}
-
-.toast.success{
-  border-color:#2caf70;
-}
-
-.toast.error{
-  border-color:#ed1b2f;
-}
-
-.toast.warning{
-  border-color:#d99d1a;
-}
-
-.toast-icon{
-  width:32px;
-  height:32px;
-  flex:0 0 32px;
-  border-radius:50%;
-  display:grid;
-  place-items:center;
-  font-weight:1000;
-}
-
-.toast.success .toast-icon{
-  background:#123c28;
-  color:#48d98b;
-}
-
-.toast.error .toast-icon{
-  background:#4a111b;
-  color:#ff596a;
-}
-
-.toast.warning .toast-icon{
-  background:#463512;
-  color:#ffc94c;
-}
-
-.toast-content{
-  flex:1;
-  min-width:0;
-}
-
-.toast-title{
-  font-weight:900;
-  margin-bottom:4px;
-}
-
-.toast-message{
-  color:#aaa;
-  line-height:1.45;
-  word-break:break-word;
-}
-
-.toast-close{
-  border:0;
-  background:transparent;
-  color:#777;
-  font-size:18px;
-}
-
-@keyframes toastIn{
-  from{
-    opacity:0;
-    transform:translateY(-10px);
-  }
-  to{
-    opacity:1;
-    transform:translateY(0);
-  }
-}
-
-.toast.out{
-  opacity:0;
-  transform:translateY(-10px);
-  transition:.2s;
-}
-
-/* =========================================================
-   LOADING
-========================================================= */
-
-.loading{
-  opacity:.65;
-  pointer-events:none;
-}
-
-/* =========================================================
-   FOOTER
-========================================================= */
-
 .footer{
   padding:50px 22px;
   text-align:center;
@@ -663,15 +318,254 @@ button{
   display:none;
 }
 
-/* =========================================================
+/* =========================
+   ACCOUNT
+========================= */
+
+.account{
+  position:relative;
+}
+
+.accountBtn{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  background:#111114;
+  border:1px solid #303036;
+  color:#fff;
+  padding:7px 12px 7px 7px;
+  border-radius:999px;
+}
+
+.avatar{
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:#ed1b2f;
+  color:#fff;
+  font-weight:900;
+  font-size:14px;
+}
+
+.accountText{
+  max-width:140px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.accountMenu{
+  position:absolute;
+  right:0;
+  top:calc(100% + 10px);
+  width:230px;
+  background:#111216;
+  border:1px solid #303137;
+  border-radius:14px;
+  padding:8px;
+  box-shadow:0 20px 50px #0009;
+}
+
+.accountMenu .userInfo{
+  padding:12px;
+  border-bottom:1px solid #292a2f;
+  margin-bottom:6px;
+}
+
+.accountMenu .userInfo strong{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.accountMenu .userInfo small{
+  color:#888;
+}
+
+.menuBtn{
+  width:100%;
+  text-align:left;
+  background:transparent;
+  color:#ddd;
+  border:0;
+  padding:12px;
+  border-radius:9px;
+}
+
+.menuBtn:hover{
+  background:#1b1b20;
+}
+
+/* =========================
+   MODAL
+========================= */
+
+#modal{
+  position:fixed;
+  inset:0;
+  z-index:100;
+}
+
+.modalBackdrop{
+  position:absolute;
+  inset:0;
+  background:#000c;
+  display:grid;
+  place-items:center;
+  padding:20px;
+}
+
+.modalBox{
+  width:min(100%,520px);
+  max-height:90vh;
+  overflow:auto;
+  background:#111216;
+  border:1px solid #303137;
+  border-radius:18px;
+  box-shadow:0 30px 100px #000;
+  padding:24px;
+  position:relative;
+  animation:modalIn .18s ease-out;
+}
+
+@keyframes modalIn{
+  from{
+    opacity:0;
+    transform:translateY(10px) scale(.98);
+  }
+  to{
+    opacity:1;
+    transform:none;
+  }
+}
+
+.modalClose{
+  position:absolute;
+  right:16px;
+  top:16px;
+  width:36px;
+  height:36px;
+  border-radius:9px;
+  background:#19191d;
+  color:#aaa;
+  border:1px solid #292a2f;
+}
+
+.modalTitle{
+  margin:0 45px 8px 0;
+  font-size:28px;
+}
+
+.modalSub{
+  color:#888;
+  line-height:1.5;
+  margin-bottom:20px;
+}
+
+.passwordWrap{
+  position:relative;
+}
+
+.passwordWrap input{
+  padding-right:55px;
+}
+
+.passwordToggle{
+  position:absolute;
+  right:8px;
+  top:7px;
+  height:38px;
+  width:42px;
+  border:0;
+  background:transparent;
+  color:#888;
+  border-radius:7px;
+}
+
+.passwordToggle:hover{
+  background:#1b1b20;
+}
+
+.authSwitch{
+  margin-top:18px;
+  color:#888;
+  text-align:center;
+}
+
+.authSwitch button{
+  background:none;
+  border:0;
+  color:#ed1b2f;
+  font-weight:800;
+}
+
+/* =========================
+   TOAST
+========================= */
+
+#toastContainer{
+  position:fixed;
+  right:20px;
+  bottom:20px;
+  z-index:200;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  width:min(390px,calc(100vw - 40px));
+}
+
+.toast{
+  background:#111216;
+  border:1px solid #34353b;
+  border-radius:13px;
+  padding:14px 16px;
+  box-shadow:0 20px 60px #0009;
+  animation:toastIn .2s ease-out;
+}
+
+.toast.success{
+  border-color:#285c3a;
+}
+
+.toast.error{
+  border-color:#73313a;
+}
+
+.toastTitle{
+  font-weight:900;
+  margin-bottom:4px;
+}
+
+.toastText{
+  color:#aaa;
+  font-size:14px;
+  line-height:1.4;
+}
+
+@keyframes toastIn{
+  from{
+    opacity:0;
+    transform:translateY(10px);
+  }
+  to{
+    opacity:1;
+    transform:none;
+  }
+}
+
+.loading{
+  opacity:.6;
+  pointer-events:none;
+}
+
+/* =========================
    MOBILE
-========================================================= */
+========================= */
 
 @media(max-width:760px){
-
-  .nav{
-    padding:13px 16px;
-  }
 
   .navlinks{
     display:none;
@@ -679,19 +573,6 @@ button{
 
   .mobilemenu{
     display:block;
-  }
-
-  .account-email{
-    display:none;
-  }
-
-  .account-btn{
-    padding:6px;
-  }
-
-  .account-menu{
-    right:-5px;
-    width:250px;
   }
 
   .stats{
@@ -716,6 +597,10 @@ button{
     grid-template-columns:1fr;
   }
 
+  .row{
+    grid-template-columns:1fr;
+  }
+
   .hero{
     padding-top:45px;
   }
@@ -724,290 +609,218 @@ button{
     letter-spacing:-3px;
   }
 
-  .hero h2{
-    font-size:23px;
-  }
-
-  .hero p{
-    font-size:17px;
-  }
-
   .section h2{
     font-size:36px;
   }
 
-  .modal-box{
-    padding:24px 18px;
-    border-radius:18px;
-  }
-
-  .modal-title{
-    font-size:30px;
-  }
-
-  #toastContainer{
-    top:12px;
-    right:12px;
-    width:calc(100vw - 24px);
+  .accountText{
+    display:none;
   }
 }
-
 </style>
 </head>
 
 <body>
 
-<!-- =======================================================
-     HEADER
-======================================================== -->
-
 <header class="top">
 
-  <div class="nav">
+<div class="nav">
 
-    <div class="brand">
-      CUSTOM <b>151</b>
-    </div>
+<div class="brand">
+CUSTOM <b>151</b>
+</div>
 
-    <nav class="navlinks">
+<nav class="navlinks">
 
-      <a href="#home">
-        TRANG CHỦ
-      </a>
+<a href="#home">TRANG CHỦ</a>
+<a href="#tournaments">GIẢI ĐẤU</a>
+<a href="#schedule">LỊCH THI ĐẤU</a>
+<a href="#ranking">BẢNG XẾP HẠNG</a>
 
-      <a href="#tournaments">
-        GIẢI ĐẤU
-      </a>
+<div id="authArea">
+<button
+class="btn red"
+onclick="openAuth()">
+ĐĂNG NHẬP
+</button>
+</div>
 
-      <a href="#schedule">
-        LỊCH THI ĐẤU
-      </a>
+</nav>
 
-      <a href="#ranking">
-        BẢNG XẾP HẠNG
-      </a>
+<button
+class="btn ghost mobilemenu"
+onclick="openAuth()">
+☰
+</button>
 
-      <div id="authArea">
-        <button
-          class="btn red"
-          onclick="openLogin()"
-        >
-          ĐĂNG NHẬP
-        </button>
-      </div>
-
-    </nav>
-
-    <div id="mobileAuthArea">
-
-      <button
-        class="btn ghost mobilemenu"
-        onclick="openLogin()"
-      >
-        ☰
-      </button>
-
-    </div>
-
-  </div>
+</div>
 
 </header>
 
 
 <main id="home">
 
-<!-- =======================================================
-     HERO
-======================================================== -->
-
 <section class="hero">
 
-  <div class="eyebrow">
-    CUSTOM 151 • COMMUNITY TOURNAMENT
-  </div>
+<div class="eyebrow">
+CUSTOM 151 • COMMUNITY TOURNAMENT
+</div>
 
-  <h1>
-    CUSTOM <span>151</span>
-  </h1>
+<h1>
+CUSTOM <span>151</span>
+</h1>
 
-  <h2>
-    NƠI ĐỘI TUYỂN KHẲNG ĐỊNH ĐẲNG CẤP
-  </h2>
+<h2>
+NƠI ĐỘI TUYỂN KHẲNG ĐỊNH ĐẲNG CẤP
+</h2>
 
-  <p>
-    Đăng ký đội tuyển, chọn khung giờ và sẵn sàng bước vào
-    những trận đấu sinh tồn đầy cạnh tranh.
-  </p>
+<p>
+Đăng ký đội tuyển, chọn khung giờ và sẵn sàng bước vào
+những trận đấu sinh tồn đầy cạnh tranh.
+</p>
 
-  <div class="actions">
+<div class="actions">
 
-    <button
-      class="btn red"
-      onclick="openRegister()"
-    >
-      → ĐĂNG KÝ ĐỘI
-    </button>
+<button
+class="btn red"
+onclick="openRegister()">
+→ ĐĂNG KÝ ĐỘI
+</button>
 
-    <a
-      class="btn ghost"
-      href="#schedule"
-    >
-      XEM LỊCH ĐẤU
-    </a>
+<a
+class="btn ghost"
+href="#schedule">
+XEM LỊCH ĐẤU
+</a>
 
-  </div>
+</div>
 
 </section>
 
-
-<!-- =======================================================
-     STATS
-======================================================== -->
 
 <section class="stats">
 
-  <div class="stat">
-    <strong>04</strong>
-    <small>KHUNG GIỜ</small>
-  </div>
+<div class="stat">
+<strong>04</strong>
+<small>KHUNG GIỜ</small>
+</div>
 
-  <div class="stat">
-    <strong>02</strong>
-    <small>BẢNG ĐẤU</small>
-  </div>
+<div class="stat">
+<strong>02</strong>
+<small>BẢNG ĐẤU</small>
+</div>
 
-  <div class="stat">
-    <strong class="gold">LIVE</strong>
-    <small>CẬP NHẬT ĐỘI</small>
-  </div>
+<div class="stat">
+<strong class="gold">LIVE</strong>
+<small>CẬP NHẬT ĐỘI</small>
+</div>
 
-  <div class="stat">
-    <strong class="gold">24/7</strong>
-    <small>ĐĂNG KÝ ONLINE</small>
-  </div>
-
-</section>
-
-
-<!-- =======================================================
-     TOURNAMENTS
-======================================================== -->
-
-<section
-  class="section"
-  id="tournaments"
->
-
-  <h2>
-    GIẢI <span>ĐẤU</span>
-  </h2>
-
-  <p class="muted">
-    Giải đang mở đăng ký
-  </p>
-
-  <div
-    id="tournamentCards"
-    class="cards"
-  ></div>
+<div class="stat">
+<strong class="gold">24/7</strong>
+<small>ĐĂNG KÝ ONLINE</small>
+</div>
 
 </section>
 
 
-<!-- =======================================================
-     SCHEDULE
-======================================================== -->
-
 <section
-  class="section"
-  id="schedule"
->
+class="section"
+id="tournaments">
 
-  <h2>
-    LỊCH THI <span>ĐẤU</span>
-  </h2>
+<h2>
+GIẢI <span>ĐẤU</span>
+</h2>
 
-  <p class="muted">
-    Chọn khung giờ • Xem đội tuyển • Sẵn sàng thi đấu
-  </p>
+<p class="muted">
+Giải đang mở đăng ký
+</p>
 
-  <div class="tabs">
+<div
+id="tournamentCards"
+class="cards">
 
-    <button
-      class="btn red tab"
-    >
-      13:00
-    </button>
-
-    <button
-      class="btn ghost tab"
-    >
-      15:00
-    </button>
-
-    <button
-      class="btn ghost tab"
-    >
-      20:00
-    </button>
-
-    <button
-      class="btn ghost tab"
-    >
-      22:00
-    </button>
-
-  </div>
+</div>
 
 </section>
 
 
-<!-- =======================================================
-     RANKING
-======================================================== -->
+<section
+class="section"
+id="schedule">
+
+<h2>
+LỊCH THI <span>ĐẤU</span>
+</h2>
+
+<p class="muted">
+Chọn khung giờ • Xem đội tuyển • Sẵn sàng thi đấu
+</p>
+
+<div class="tabs">
+
+<button class="btn red tab">
+13:00
+</button>
+
+<button class="btn ghost tab">
+15:00
+</button>
+
+<button class="btn ghost tab">
+20:00
+</button>
+
+<button class="btn ghost tab">
+22:00
+</button>
+
+</div>
+
+</section>
+
 
 <section
-  class="section"
-  id="ranking"
->
+class="section"
+id="ranking">
 
-  <h2>
-    BẢNG XẾP <span>HẠNG</span>
-  </h2>
+<h2>
+BẢNG XẾP <span>HẠNG</span>
+</h2>
 
-  <div class="card">
+<div class="card">
 
-    <div class="tablewrap">
+<div class="tablewrap">
 
-      <table class="table">
+<table class="table">
 
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Đội</th>
-            <th>Hạ gục</th>
-            <th>Điểm</th>
-          </tr>
-        </thead>
+<thead>
 
-        <tbody id="rankBody">
+<tr>
+<th>#</th>
+<th>Đội</th>
+<th>Hạ gục</th>
+<th>Điểm</th>
+</tr>
 
-          <tr>
-            <td
-              colspan="4"
-              class="muted"
-            >
-              Đang tải...
-            </td>
-          </tr>
+</thead>
 
-        </tbody>
+<tbody id="rankBody">
 
-      </table>
+<tr>
+<td
+colspan="4"
+class="muted">
+Chưa có kết quả.
+</td>
+</tr>
 
-    </div>
+</tbody>
 
-  </div>
+</table>
+
+</div>
+
+</div>
 
 </section>
 
@@ -1015,46 +828,79 @@ button{
 
 
 <footer class="footer">
-  CUSTOM 151 • FREE FIRE TOURNAMENT SYSTEM • 2026
+CUSTOM 151 • FREE FIRE TOURNAMENT SYSTEM • 2026
 </footer>
 
 
-<!-- =======================================================
-     MODAL
-======================================================== -->
-
 <div
-  id="modal"
-  class="hide"
-></div>
+id="modal"
+class="hide">
+</div>
 
 
-<!-- =======================================================
-     TOAST
-======================================================== -->
-
-<div
-  id="toastContainer"
-></div>
+<div id="toastContainer">
+</div>
 
 
 <script>
 
-/* =========================================================
-   GLOBAL STATE
-========================================================= */
-
-let currentUser = null;
-let signupEmailMemory = "";
-
-
-/* =========================================================
-   BASIC HELPERS
-========================================================= */
-
 const $ = selector =>
   document.querySelector(selector);
 
+
+/* =========================
+   API
+========================= */
+
+async function api(url, options = {}) {
+
+  const config = {
+    ...options,
+    credentials: "same-origin",
+    headers: {
+      ...(options.body
+        ? {"content-type":"application/json"}
+        : {}),
+      ...(options.headers || {})
+    }
+  };
+
+  const response =
+    await fetch(url, config);
+
+  const data =
+    await response
+      .json()
+      .catch(() => ({
+        success:false,
+        message:"Server trả dữ liệu không hợp lệ."
+      }));
+
+  if (!response.ok) {
+
+    const error =
+      new Error(
+        data.message ||
+        data.error ||
+        "Có lỗi xảy ra."
+      );
+
+    error.code =
+      data.error || "UNKNOWN";
+
+    error.status =
+      response.status;
+
+    throw error;
+  }
+
+  return data;
+}
+
+
+/* =========================
+   ESCAPE
+========================= */
 
 function esc(value){
 
@@ -1070,160 +916,78 @@ function esc(value){
 }
 
 
-/* =========================================================
-   API
-========================================================= */
-
-async function api(url, options = {}){
-
-  const response = await fetch(
-    url,
-    {
-      credentials:"same-origin",
-
-      ...options,
-
-      headers:{
-        ...(options.body
-          ? {"content-type":"application/json"}
-          : {}),
-        ...(options.headers || {})
-      }
-    }
-  );
-
-  const data =
-    await response
-      .json()
-      .catch(() => ({
-        success:false,
-        error:"Server trả về dữ liệu không hợp lệ."
-      }));
-
-  if(!response.ok || data.success === false){
-
-    const error =
-      new Error(
-        data.error ||
-        data.message ||
-        "Có lỗi xảy ra."
-      );
-
-    error.code = data.code;
-    error.status = response.status;
-
-    throw error;
-  }
-
-  return data;
-}
-
-
-/* =========================================================
+/* =========================
    TOAST
-========================================================= */
+========================= */
 
-function showToast(
-  type,
+function toast(
   title,
   message,
-  duration = 4000
+  type = "success"
 ){
 
   const container =
     $("#toastContainer");
 
-  const toast =
+  const item =
     document.createElement("div");
 
-  toast.className =
+  item.className =
     `toast ${type}`;
 
-  const icon =
-    type === "success"
-      ? "✓"
-      : type === "warning"
-        ? "!"
-        : "×";
+  item.innerHTML = `
 
-  toast.innerHTML = `
-
-    <div class="toast-icon">
-      ${icon}
+    <div class="toastTitle">
+      ${esc(title)}
     </div>
 
-    <div class="toast-content">
-
-      <div class="toast-title">
-        ${esc(title)}
-      </div>
-
-      <div class="toast-message">
-        ${esc(message)}
-      </div>
-
+    <div class="toastText">
+      ${esc(message)}
     </div>
-
-    <button
-      class="toast-close"
-      aria-label="Đóng"
-    >
-      ×
-    </button>
 
   `;
 
-  toast
-    .querySelector(".toast-close")
-    .onclick = () => removeToast(toast);
+  container.appendChild(item);
 
-  container.appendChild(toast);
+  setTimeout(() => {
 
-  setTimeout(
-    () => removeToast(toast),
-    duration
-  );
+    item.style.opacity = "0";
+    item.style.transform =
+      "translateY(8px)";
+
+    setTimeout(
+      () => item.remove(),
+      200
+    );
+
+  }, 3500);
 }
 
 
-function removeToast(toast){
-
-  if(!toast || !toast.isConnected){
-    return;
-  }
-
-  toast.classList.add("out");
-
-  setTimeout(
-    () => toast.remove(),
-    220
-  );
-}
-
-
-/* =========================================================
+/* =========================
    MODAL
-========================================================= */
+========================= */
 
-function openModal(content){
+function modal(content){
 
-  $("#modal").className = "";
+  const modal =
+    $("#modal");
 
-  $("#modal").innerHTML = `
+  modal.className = "";
+
+  modal.innerHTML = `
 
     <div
-      class="modal-backdrop"
+      class="modalBackdrop"
       onclick="backdropClose(event)"
     >
 
-      <div class="modal-box">
+      <div class="modalBox">
 
         <button
-          class="modal-close"
-          onclick="closeModal()"
-          type="button"
-        >
-          ×
+          class="modalClose"
+          onclick="closeModal()">
+          ✕
         </button>
 
         ${content}
@@ -1234,18 +998,16 @@ function openModal(content){
 
   `;
 
-  document.body.classList.add(
-    "modal-open"
-  );
+  document.body.style.overflow =
+    "hidden";
 }
 
 
 function backdropClose(event){
 
   if(
-    event.target.classList.contains(
-      "modal-backdrop"
-    )
+    event.target.classList
+      .contains("modalBackdrop")
   ){
     closeModal();
   }
@@ -1258,125 +1020,85 @@ function closeModal(){
   $("#modal").className =
     "hide";
 
-  $("#modal").innerHTML = "";
-
-  document.body.classList.remove(
-    "modal-open"
-  );
-}
-
-
-/* =========================================================
-   PASSWORD VISIBILITY
-========================================================= */
-
-function togglePassword(id, button){
-
-  const input = document.getElementById(id);
-
-  if(!input){
-    return;
-  }
-
-  if(input.type === "password"){
-
-    input.type = "text";
-
-    button.textContent = "🙈";
-
-  }else{
-
-    input.type = "password";
-
-    button.textContent = "👁";
-
-  }
-
-}
-
-
-/* =========================================================
-   LOGIN
-========================================================= */
-
-function openLogin(prefillEmail = ""){
-
-  const email =
-    prefillEmail ||
-    signupEmailMemory ||
+  $("#modal").innerHTML =
     "";
 
-  openModal(`
+  document.body.style.overflow =
+    "";
 
-    <h2 class="modal-title">
+}
+
+
+/* =========================
+   AUTH
+========================= */
+
+function openAuth(){
+
+  modal(`
+
+    <h2 class="modalTitle">
       ĐĂNG NHẬP
     </h2>
 
+    <p class="modalSub">
+      Đăng nhập để quản lý tài khoản
+      và đăng ký đội tuyển.
+    </p>
+
     <form
-      class="form"
-      onsubmit="submitLogin(event)"
+      id="loginForm"
+      onsubmit="login(event)"
     >
 
-      <label>
-        Email
-      </label>
+      <label>Email</label>
 
       <input
         id="loginEmail"
         type="email"
         autocomplete="email"
-        value="${esc(email)}"
         placeholder="you@example.com"
         required
       >
 
-      <label>
-        Mật khẩu
-      </label>
+      <label>Mật khẩu</label>
 
-      <div class="password-box">
+      <div class="passwordWrap">
 
         <input
           id="loginPassword"
           type="password"
           autocomplete="current-password"
           placeholder="Nhập mật khẩu"
+          minlength="8"
           required
         >
 
         <button
           type="button"
-          class="password-eye"
-          onclick="
-            togglePassword(
-              'loginPassword',
-              this
-            )
-          "
-        >
+          class="passwordToggle"
+          onclick="togglePassword('loginPassword',this)">
           👁
         </button>
 
       </div>
 
       <button
-        id="loginSubmit"
-        class="btn red auth-submit"
-        type="submit"
-      >
+        id="loginButton"
+        class="btn red"
+        style="margin-top:20px;width:100%">
         ĐĂNG NHẬP
       </button>
 
     </form>
 
-    <div class="auth-switch">
+    <div class="authSwitch">
 
       Chưa có tài khoản?
 
       <button
         type="button"
-        onclick="openSignup()"
-      >
+        onclick="openSignup()">
         Tạo tài khoản
       </button>
 
@@ -1387,16 +1109,239 @@ function openLogin(prefillEmail = ""){
 }
 
 
-/* =========================================================
-   SUBMIT LOGIN
-========================================================= */
+function openSignup(){
 
-async function submitLogin(event){
+  modal(`
+
+    <h2 class="modalTitle">
+      TẠO TÀI KHOẢN
+    </h2>
+
+    <p class="modalSub">
+      Tạo tài khoản CUSTOM 151 miễn phí.
+    </p>
+
+    <form
+      id="signupForm"
+      onsubmit="signup(event)"
+    >
+
+      <label>Email</label>
+
+      <input
+        id="signupEmail"
+        type="email"
+        autocomplete="email"
+        placeholder="you@example.com"
+        required
+      >
+
+      <label>Mật khẩu</label>
+
+      <div class="passwordWrap">
+
+        <input
+          id="signupPassword"
+          type="password"
+          autocomplete="new-password"
+          placeholder="Ít nhất 8 ký tự"
+          minlength="8"
+          required
+        >
+
+        <button
+          type="button"
+          class="passwordToggle"
+          onclick="togglePassword('signupPassword',this)">
+          👁
+        </button>
+
+      </div>
+
+      <label>
+        Xác nhận mật khẩu
+      </label>
+
+      <div class="passwordWrap">
+
+        <input
+          id="signupPassword2"
+          type="password"
+          autocomplete="new-password"
+          placeholder="Nhập lại mật khẩu"
+          minlength="8"
+          required
+        >
+
+        <button
+          type="button"
+          class="passwordToggle"
+          onclick="togglePassword('signupPassword2',this)">
+          👁
+        </button>
+
+      </div>
+
+      <button
+        id="signupButton"
+        class="btn red"
+        style="margin-top:20px;width:100%">
+        TẠO TÀI KHOẢN
+      </button>
+
+    </form>
+
+    <div class="authSwitch">
+
+      Đã có tài khoản?
+
+      <button
+        type="button"
+        onclick="openAuth()">
+        Đăng nhập
+      </button>
+
+    </div>
+
+  `);
+
+}
+
+
+function togglePassword(id, button){
+
+  const input =
+    document.getElementById(id);
+
+  if(input.type === "password"){
+
+    input.type = "text";
+    button.textContent = "🙈";
+
+  }else{
+
+    input.type = "password";
+    button.textContent = "👁";
+
+  }
+
+}
+
+
+/* =========================
+   REGISTER
+========================= */
+
+async function signup(event){
 
   event.preventDefault();
 
+  const email =
+    $("#signupEmail").value.trim();
+
+  const password =
+    $("#signupPassword").value;
+
+  const password2 =
+    $("#signupPassword2").value;
+
+  if(password !== password2){
+
+    toast(
+      "Tạo tài khoản thất bại",
+      "Hai mật khẩu không giống nhau.",
+      "error"
+    );
+
+    return;
+  }
+
   const button =
-    $("#loginSubmit");
+    $("#signupButton");
+
+  button.disabled = true;
+  button.textContent =
+    "ĐANG TẠO TÀI KHOẢN...";
+
+  try{
+
+    const data =
+      await api(
+        "/api/auth/register",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            email,
+            password
+          })
+        }
+      );
+
+    toast(
+      "Tạo tài khoản thành công",
+      data.message ||
+        "Tài khoản đã được tạo.",
+      "success"
+    );
+
+    setTimeout(
+      () => openAuthWithEmail(email),
+      500
+    );
+
+  }catch(error){
+
+    console.error(error);
+
+    let message =
+      error.message;
+
+    if(error.code === "EMAIL_EXISTS"){
+
+      message =
+        "Email này đã được đăng ký. Hãy đăng nhập.";
+
+    }
+
+    toast(
+      "Tạo tài khoản thất bại",
+      message,
+      "error"
+    );
+
+    button.disabled = false;
+    button.textContent =
+      "TẠO TÀI KHOẢN";
+  }
+
+}
+
+
+function openAuthWithEmail(email){
+
+  openAuth();
+
+  const input =
+    $("#loginEmail");
+
+  if(input){
+
+    input.value = email;
+
+    $("#loginPassword").focus();
+
+  }
+
+}
+
+
+/* =========================
+   LOGIN
+========================= */
+
+async function login(event){
+
+  event.preventDefault();
 
   const email =
     $("#loginEmail").value.trim();
@@ -1404,8 +1349,12 @@ async function submitLogin(event){
   const password =
     $("#loginPassword").value;
 
+  const button =
+    $("#loginButton");
+
   button.disabled = true;
-  button.textContent = "ĐANG ĐĂNG NHẬP...";
+  button.textContent =
+    "ĐANG ĐĂNG NHẬP...";
 
   try{
 
@@ -1421,298 +1370,77 @@ async function submitLogin(event){
         }
       );
 
-    currentUser =
-      data.user;
-
     closeModal();
 
-    updateAuthUI();
-
-    showToast(
-      "success",
-      "Đăng nhập thành công",
-      `Chào mừng ${data.user.email}!`
+    updateAccountUI(
+      data.user
     );
 
-    /*
-      Admin/Super Admin:
-      sau này có thể chuyển sang admin.html.
-      Hiện tại không tự chuyển để flow tài khoản
-      của user không bị gián đoạn.
-    */
+    toast(
+      "Đăng nhập thành công",
+      `Chào mừng ${data.user.email}`,
+      "success"
+    );
 
   }catch(error){
 
-    showToast(
-      "error",
+    console.error(error);
+
+    let message =
+      error.message ||
+      "Email hoặc mật khẩu không đúng.";
+
+    if(
+      error.code ===
+      "INVALID_CREDENTIALS"
+    ){
+
+      message =
+        "Email hoặc mật khẩu không đúng.";
+
+    }
+
+    toast(
       "Đăng nhập thất bại",
-      error.message
+      message,
+      "error"
     );
 
-  }finally{
-
     button.disabled = false;
-
     button.textContent =
       "ĐĂNG NHẬP";
-
   }
 
 }
 
 
-/* =========================================================
-   SIGNUP
-========================================================= */
+/* =========================
+   ACCOUNT UI
+========================= */
 
-function openSignup(){
+function getInitial(email){
 
-  openModal(`
-
-    <h2 class="modal-title">
-      TẠO TÀI KHOẢN
-    </h2>
-
-    <form
-      class="form"
-      onsubmit="submitSignup(event)"
-    >
-
-      <label>
-        Email
-      </label>
-
-      <input
-        id="signupEmail"
-        type="email"
-        autocomplete="email"
-        placeholder="you@example.com"
-        required
-      >
-
-      <label>
-        Mật khẩu
-      </label>
-
-      <div class="password-box">
-
-        <input
-          id="signupPassword"
-          type="password"
-          autocomplete="new-password"
-          minlength="8"
-          placeholder="Ít nhất 8 ký tự"
-          required
-        >
-
-        <button
-          type="button"
-          class="password-eye"
-          onclick="
-            togglePassword(
-              'signupPassword',
-              this
-            )
-          "
-        >
-          👁
-        </button>
-
-      </div>
-
-      <label>
-        Nhập lại mật khẩu
-      </label>
-
-      <div class="password-box">
-
-        <input
-          id="signupPasswordConfirm"
-          type="password"
-          autocomplete="new-password"
-          minlength="8"
-          placeholder="Nhập lại mật khẩu"
-          required
-        >
-
-        <button
-          type="button"
-          class="password-eye"
-          onclick="
-            togglePassword(
-              'signupPasswordConfirm',
-              this
-            )
-          "
-        >
-          👁
-        </button>
-
-      </div>
-
-      <button
-        id="signupSubmit"
-        class="btn red auth-submit"
-        type="submit"
-      >
-        TẠO TÀI KHOẢN
-      </button>
-
-    </form>
-
-    <div class="auth-switch">
-
-      Đã có tài khoản?
-
-      <button
-        type="button"
-        onclick="openLogin()"
-      >
-        Đăng nhập
-      </button>
-
-    </div>
-
-  `);
+  return String(email || "U")
+    .trim()
+    .charAt(0)
+    .toUpperCase();
 
 }
 
 
-/* =========================================================
-   SUBMIT SIGNUP
-========================================================= */
-
-async function submitSignup(event){
-
-  event.preventDefault();
-
-  const button =
-    $("#signupSubmit");
-
-  const email =
-    $("#signupEmail").value.trim();
-
-  const password =
-    $("#signupPassword").value;
-
-  const confirm =
-    $("#signupPasswordConfirm").value;
-
-  if(password !== confirm){
-
-    showToast(
-      "warning",
-      "Kiểm tra mật khẩu",
-      "Mật khẩu nhập lại không khớp."
-    );
-
-    return;
-  }
-
-  if(password.length < 8){
-
-    showToast(
-      "warning",
-      "Mật khẩu chưa đủ mạnh",
-      "Mật khẩu phải có ít nhất 8 ký tự."
-    );
-
-    return;
-  }
-
-  signupEmailMemory = email;
-
-  button.disabled = true;
-
-  button.textContent =
-    "ĐANG TẠO TÀI KHOẢN...";
-
-  try{
-
-    await api(
-      "/api/auth/register",
-      {
-        method:"POST",
-        body:JSON.stringify({
-          email,
-          password
-        })
-      }
-    );
-
-    /*
-      Đăng ký thành công:
-      - Thông báo thành công
-      - Đóng form đăng ký
-      - Mở form đăng nhập
-      - Email được điền sẵn
-    */
-
-    closeModal();
-
-    showToast(
-      "success",
-      "Tạo tài khoản thành công",
-      "Tài khoản đã được tạo. Đang chuyển sang đăng nhập..."
-    );
-
-    setTimeout(
-      () => openLogin(email),
-      900
-    );
-
-  }catch(error){
-
-    showToast(
-      "error",
-      "Tạo tài khoản thất bại",
-      error.message
-    );
-
-  }finally{
-
-    button.disabled = false;
-
-    button.textContent =
-      "TẠO TÀI KHOẢN";
-
-  }
-
-}
-
-
-/* =========================================================
-   AUTH UI
-========================================================= */
-
-function updateAuthUI(){
+function updateAccountUI(user){
 
   const area =
     $("#authArea");
 
-  const mobileArea =
-    $("#mobileAuthArea");
-
-  if(!currentUser){
+  if(!user){
 
     area.innerHTML = `
 
       <button
         class="btn red"
-        onclick="openLogin()"
-      >
+        onclick="openAuth()">
         ĐĂNG NHẬP
-      </button>
-
-    `;
-
-    mobileArea.innerHTML = `
-
-      <button
-        class="btn ghost mobilemenu"
-        onclick="openLogin()"
-      >
-        ☰
       </button>
 
     `;
@@ -1720,27 +1448,23 @@ function updateAuthUI(){
     return;
   }
 
-  const firstLetter =
-    String(currentUser.email || "U")
-      .charAt(0)
-      .toUpperCase();
+  const initial =
+    getInitial(user.email);
 
   area.innerHTML = `
 
-    <div class="account-wrap">
+    <div class="account">
 
       <button
-        class="account-btn"
-        onclick="toggleAccountMenu()"
-        type="button"
-      >
+        class="accountBtn"
+        onclick="toggleAccountMenu()">
 
         <span class="avatar">
-          ${esc(firstLetter)}
+          ${esc(initial)}
         </span>
 
-        <span class="account-email">
-          ${esc(currentUser.email)}
+        <span class="accountText">
+          ${esc(user.email)}
         </span>
 
         <span>
@@ -1751,73 +1475,47 @@ function updateAuthUI(){
 
       <div
         id="accountMenu"
-        class="account-menu hide"
-      >
+        class="accountMenu hide">
 
-        <div class="account-info">
+        <div class="userInfo">
 
           <strong>
-            Tài khoản
+            ${esc(user.email)}
           </strong>
 
           <small>
-            ${esc(currentUser.email)}
+            ${esc(user.role || "USER")}
           </small>
 
         </div>
 
         <button
-          class="account-item"
-          onclick="showAccountInfo()"
-        >
-          👤 Tài khoản của tôi
+          class="menuBtn"
+          onclick="accountProfile()">
+          👤 Tài khoản
         </button>
 
-        <button
-          class="account-item"
-          onclick="openRegister()"
-        >
-          🏆 Đăng ký đội
-        </button>
+        ${
+          user.role !== "USER"
+          ?
+          `
+          <button
+            class="menuBtn"
+            onclick="location.href='/admin.html'">
+            ⚙️ Quản trị
+          </button>
+          `
+          :
+          ""
+        }
 
         <button
-          class="account-item"
-          onclick="
-            location.hash='#tournaments';
-            closeAccountMenu();
-          "
-        >
-          📋 Xem giải đấu
-        </button>
-
-        <button
-          class="account-item logout"
-          onclick="logout()"
-        >
-          🚪 Đăng xuất
+          class="menuBtn"
+          onclick="logout()">
+          ↪ Đăng xuất
         </button>
 
       </div>
-
-    </div>
-
-  `;
-
-  mobileArea.innerHTML = `
-
-    <div class="account-wrap">
-
-      <button
-        class="account-btn"
-        onclick="toggleAccountMenu()"
-        type="button"
-      >
-
-        <span class="avatar">
-          ${esc(firstLetter)}
-        </span>
-
-      </button>
 
     </div>
 
@@ -1831,9 +1529,7 @@ function toggleAccountMenu(){
   const menu =
     $("#accountMenu");
 
-  if(!menu){
-    return;
-  }
+  if(!menu) return;
 
   menu.classList.toggle(
     "hide"
@@ -1842,62 +1538,25 @@ function toggleAccountMenu(){
 }
 
 
-function closeAccountMenu(){
+function accountProfile(){
 
   const menu =
     $("#accountMenu");
 
   if(menu){
-    menu.classList.add(
-      "hide"
-    );
+    menu.classList.add("hide");
   }
 
-}
-
-
-function showAccountInfo(){
-
-  closeAccountMenu();
-
-  openModal(`
-
-    <h2 class="modal-title">
-      TÀI KHOẢN
-    </h2>
-
-    <div class="card">
-
-      <p>
-        <strong>Email</strong>
-      </p>
-
-      <p class="muted">
-        ${esc(currentUser.email)}
-      </p>
-
-      <p>
-        <strong>Vai trò</strong>
-      </p>
-
-      <p class="muted">
-        ${esc(currentUser.role)}
-      </p>
-
-    </div>
-
-  `);
+  toast(
+    "Tài khoản",
+    "Khu vực quản lý tài khoản đang được hoàn thiện.",
+    "success"
+  );
 
 }
 
-
-/* =========================================================
-   LOGOUT
-========================================================= */
 
 async function logout(){
-
-  closeAccountMenu();
 
   try{
 
@@ -1908,22 +1567,20 @@ async function logout(){
       }
     );
 
-    currentUser = null;
+    updateAccountUI(null);
 
-    updateAuthUI();
-
-    showToast(
-      "success",
+    toast(
       "Đã đăng xuất",
-      "Bạn đã đăng xuất khỏi tài khoản."
+      "Bạn đã đăng xuất khỏi tài khoản.",
+      "success"
     );
 
   }catch(error){
 
-    showToast(
-      "error",
+    toast(
       "Đăng xuất thất bại",
-      error.message
+      error.message,
+      "error"
     );
 
   }
@@ -1931,68 +1588,87 @@ async function logout(){
 }
 
 
-/* =========================================================
+/* =========================
+   CHECK SESSION
+========================= */
+
+async function checkSession(){
+
+  try{
+
+    const data =
+      await api(
+        "/api/auth/me"
+      );
+
+    if(
+      data.success &&
+      data.authenticated &&
+      data.user
+    ){
+
+      updateAccountUI(
+        data.user
+      );
+
+    }else{
+
+      updateAccountUI(null);
+
+    }
+
+  }catch(error){
+
+    console.error(
+      "SESSION CHECK:",
+      error
+    );
+
+    updateAccountUI(null);
+
+  }
+
+}
+
+
+/* =========================
    REGISTER TEAM
-========================================================= */
+========================= */
 
 function openRegister(){
 
-  closeAccountMenu();
+  modal(`
 
-  if(!currentUser){
-
-    showToast(
-      "warning",
-      "Cần đăng nhập",
-      "Bạn cần đăng nhập trước khi đăng ký đội."
-    );
-
-    setTimeout(
-      () => openLogin(),
-      500
-    );
-
-    return;
-  }
-
-  openModal(`
-
-    <h2 class="modal-title">
+    <h2 class="modalTitle">
       ĐĂNG KÝ ĐỘI
     </h2>
 
-    <div class="card">
+    <p class="modalSub">
+      Bạn cần đăng nhập trước khi đăng ký đội tuyển.
+    </p>
 
-      <p>
-        Xin chào
-        <strong>
-          ${esc(currentUser.email)}
-        </strong>
-      </p>
+    <button
+      class="btn red"
+      style="width:100%"
+      onclick="openAuth()">
+      ĐĂNG NHẬP
+    </button>
 
-      <p class="muted">
-        Phần đăng ký đội sẽ được kết nối
-        với bảng teams và team_members.
-      </p>
-
-      <button
-        class="btn red"
-        style="width:100%;margin-top:10px"
-        onclick="closeModal()"
-      >
-        TIẾP TỤC
-      </button>
-
-    </div>
+    <button
+      class="btn ghost"
+      style="width:100%;margin-top:10px"
+      onclick="openSignup()">
+      TẠO TÀI KHOẢN
+    </button>
 
   `);
 
 }
 
 
-/* =========================================================
-   LOAD TOURNAMENTS
-========================================================= */
+/* =========================
+   TOURNAMENTS
+========================= */
 
 async function loadTournaments(){
 
@@ -2048,22 +1724,18 @@ async function loadTournaments(){
           </p>
 
           <div class="price">
-            ${Number(
-              t.fee || 0
-            ).toLocaleString("vi-VN")}đ
+            ${Number(t.fee || 0)
+              .toLocaleString("vi-VN")}đ
           </div>
 
           <p class="muted">
-            Tối đa
-            ${Number(t.max_teams || 0)}
-            đội •
-            ${esc(t.status)}
+            Tối đa ${esc(t.max_teams)}
+            đội • ${esc(t.status)}
           </p>
 
           <button
             class="btn red"
-            onclick="openRegister(${t.id})"
-          >
+            onclick="openRegister(${Number(t.id)})">
             ĐĂNG KÝ
           </button>
 
@@ -2073,16 +1745,21 @@ async function loadTournaments(){
 
   }catch(error){
 
+    console.error(
+      "TOURNAMENTS:",
+      error
+    );
+
     container.innerHTML = `
 
       <div class="card">
 
         <h3>
-          Không tải được giải đấu
+          Không thể tải giải đấu
         </h3>
 
         <p class="muted">
-          ${esc(error.message)}
+          Hãy kiểm tra kết nối D1 hoặc thử tải lại trang.
         </p>
 
       </div>
@@ -2094,153 +1771,27 @@ async function loadTournaments(){
 }
 
 
-/* =========================================================
-   LOAD RANKING
-========================================================= */
-
-async function loadRanking(){
-
-  const body =
-    $("#rankBody");
-
-  try{
-
-    const data =
-      await api(
-        "/api/ranking"
-      );
-
-    const ranking =
-      data.ranking || [];
-
-    if(!ranking.length){
-
-      body.innerHTML = `
-
-        <tr>
-          <td
-            colspan="4"
-            class="muted"
-          >
-            Chưa có kết quả.
-          </td>
-        </tr>
-
-      `;
-
-      return;
-    }
-
-    body.innerHTML =
-      ranking.map(
-        (team, index) => `
-
-          <tr>
-
-            <td>
-              <strong>
-                ${index + 1}
-              </strong>
-            </td>
-
-            <td>
-              ${esc(team.name)}
-            </td>
-
-            <td>
-              ${Number(team.kills || 0)}
-            </td>
-
-            <td>
-              <strong>
-                ${Number(team.points || 0)}
-              </strong>
-            </td>
-
-          </tr>
-
-        `
-      ).join("");
-
-  }catch(error){
-
-    body.innerHTML = `
-
-      <tr>
-
-        <td
-          colspan="4"
-          class="muted"
-        >
-          Không tải được bảng xếp hạng.
-        </td>
-
-      </tr>
-
-    `;
-
-  }
-
-}
-
-
-/* =========================================================
-   CHECK LOGIN SESSION
-========================================================= */
-
-async function checkSession(){
-
-  try{
-
-    const data =
-      await api(
-        "/api/auth/me"
-      );
-
-    if(
-      data.authenticated &&
-      data.user
-    ){
-
-      currentUser =
-        data.user;
-
-    }else{
-
-      currentUser =
-        null;
-
-    }
-
-    updateAuthUI();
-
-  }catch{
-
-    currentUser =
-      null;
-
-    updateAuthUI();
-
-  }
-
-}
-
-
-/* =========================================================
-   CLOSE ACCOUNT MENU WHEN CLICK OUTSIDE
-========================================================= */
+/* =========================
+   START
+========================= */
 
 document.addEventListener(
   "click",
   event => {
 
+    const account =
+      document.querySelector(".account");
+
+    const menu =
+      document.querySelector("#accountMenu");
+
     if(
-      !event.target.closest(
-        ".account-wrap"
-      )
+      account &&
+      menu &&
+      !account.contains(event.target)
     ){
 
-      closeAccountMenu();
+      menu.classList.add("hide");
 
     }
 
@@ -2248,42 +1799,14 @@ document.addEventListener(
 );
 
 
-/* =========================================================
-   ESC CLOSE MODAL
-========================================================= */
-
-document.addEventListener(
-  "keydown",
-  event => {
-
-    if(event.key === "Escape"){
-
-      closeModal();
-      closeAccountMenu();
-
-    }
-
-  }
-);
-
-
-/* =========================================================
-   INITIALIZE
-========================================================= */
-
-async function init(){
-
-  updateAuthUI();
+(async function(){
 
   await Promise.all([
     checkSession(),
-    loadTournaments(),
-    loadRanking()
+    loadTournaments()
   ]);
 
-}
-
-init();
+})();
 
 </script>
 
