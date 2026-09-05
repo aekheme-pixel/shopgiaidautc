@@ -4,24 +4,45 @@
  *
  * main = "index.js"
  *
- * Form đăng ký:
- *   Email
- *   Mật khẩu
- *   Nhập lại mật khẩu
+ * AUTH:
+ *   Register:
+ *     username
+ *     email
+ *     password
+ *     confirmPassword
  *
- * Không có tên tài khoản.
+ *   Login:
+ *     email
+ *     password
  *
- * PBKDF2 tối đa 100000 iterations vì Cloudflare Workers
- * không hỗ trợ giá trị cao hơn mức này.
+ * USER:
+ *   id
+ *   username
+ *   email
+ *   role
+ *   balance
+ *
+ * SESSION:
+ *   app_sessions
+ *
+ * PASSWORD:
+ *   PBKDF2 SHA-256
+ *   100000 iterations
  */
 
 const PBKDF2_ITERATIONS = 100000;
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+const SESSION_TTL_SECONDS =
+  60 * 60 * 24 * 30;
+
 const SESSION_COOKIE = "vtc_session";
 
 const JSON_HEADERS = {
-  "content-type": "application/json; charset=utf-8",
-  "cache-control": "no-store",
+  "content-type":
+    "application/json; charset=utf-8",
+
+  "cache-control":
+    "no-store",
 };
 
 export default {
@@ -29,21 +50,35 @@ export default {
     const url = new URL(request.url);
 
     try {
-      if (url.pathname.startsWith("/api/")) {
-        return await api(request, env, url);
+      if (
+        url.pathname.startsWith("/api/")
+      ) {
+        return await api(
+          request,
+          env,
+          url
+        );
       }
 
       if (env.ASSETS) {
         return env.ASSETS.fetch(request);
       }
 
-      return new Response("Assets chưa được cấu hình.", {
-        status: 500,
-      });
+      return new Response(
+        "Assets chưa được cấu hình.",
+        {
+          status: 500,
+        }
+      );
     } catch (error) {
-      console.error("WORKER ERROR:", error);
+      console.error(
+        "WORKER ERROR:",
+        error
+      );
 
-      if (url.pathname.startsWith("/api/")) {
+      if (
+        url.pathname.startsWith("/api/")
+      ) {
         return json(
           {
             ok: false,
@@ -55,32 +90,45 @@ export default {
         );
       }
 
-      return new Response("Internal Server Error", {
-        status: 500,
-      });
+      return new Response(
+        "Internal Server Error",
+        {
+          status: 500,
+        }
+      );
     }
   },
 };
-
 
 /* =========================================================
    API ROUTER
 ========================================================= */
 
-async function api(request, env, url) {
-  const method = request.method.toUpperCase();
+async function api(
+  request,
+  env,
+  url
+) {
+  const method =
+    request.method.toUpperCase();
 
   if (method === "OPTIONS") {
     return new Response(null, {
       status: 204,
-      headers: corsHeaders(request),
+      headers:
+        corsHeaders(request),
     });
   }
 
-  if (url.pathname === "/api/health" && method === "GET") {
+  if (
+    url.pathname ===
+      "/api/health" &&
+    method === "GET"
+  ) {
     return json(
       {
         ok: true,
+
         site:
           env.SITE_NAME ||
           "GIẢI ĐẤU TỬ CHIẾN – MÙA 1",
@@ -92,59 +140,91 @@ async function api(request, env, url) {
   }
 
   if (
-    url.pathname === "/api/auth/register" &&
+    url.pathname ===
+      "/api/auth/register" &&
     method === "POST"
   ) {
-    return handleRegister(request, env);
+    return handleRegister(
+      request,
+      env
+    );
   }
 
   if (
-    url.pathname === "/api/auth/login" &&
+    url.pathname ===
+      "/api/auth/login" &&
     method === "POST"
   ) {
-    return handleLogin(request, env);
+    return handleLogin(
+      request,
+      env
+    );
   }
 
   if (
-    url.pathname === "/api/auth/logout" &&
+    url.pathname ===
+      "/api/auth/logout" &&
     method === "POST"
   ) {
-    return handleLogout(request, env);
+    return handleLogout(
+      request,
+      env
+    );
   }
 
   if (
-    url.pathname === "/api/auth/me" &&
+    url.pathname ===
+      "/api/auth/me" &&
     method === "GET"
   ) {
-    return handleMe(request, env);
+    return handleMe(
+      request,
+      env
+    );
   }
 
   if (
-    url.pathname === "/api/tournament" &&
+    url.pathname ===
+      "/api/tournament" &&
     method === "GET"
   ) {
-    return handleTournament(env, request);
+    return handleTournament(
+      env,
+      request
+    );
   }
 
   if (
-    url.pathname === "/api/team/register" &&
+    url.pathname ===
+      "/api/team/register" &&
     method === "POST"
   ) {
-    return handleTeamRegister(request, env);
+    return handleTeamRegister(
+      request,
+      env
+    );
   }
 
   if (
-    url.pathname === "/api/ranking" &&
+    url.pathname ===
+      "/api/ranking" &&
     method === "GET"
   ) {
-    return handleRanking(env, request);
+    return handleRanking(
+      env,
+      request
+    );
   }
 
   if (
-    url.pathname === "/api/payment/webhook" &&
+    url.pathname ===
+      "/api/payment/webhook" &&
     method === "POST"
   ) {
-    return handlePaymentWebhook(request, env);
+    return handlePaymentWebhook(
+      request,
+      env
+    );
   }
 
   return json(
@@ -158,29 +238,82 @@ async function api(request, env, url) {
   );
 }
 
-
 /* =========================================================
    REGISTER
 ========================================================= */
 
-async function handleRegister(request, env) {
-  const data = await readJson(request);
+async function handleRegister(
+  request,
+  env
+) {
+  const data =
+    await readJson(request);
 
-  const email = normalizeEmail(data.email);
-  const password = String(data.password || "");
+  const username =
+    normalizeUsername(
+      data.username ??
+      data.userName ??
+      data.accountName ??
+      ""
+    );
 
-  const confirmPassword = String(
-    data.confirmPassword ??
-    data.passwordConfirm ??
-    data.confirm ??
-    ""
-  );
+  const email =
+    normalizeEmail(data.email);
+
+  const password =
+    String(data.password || "");
+
+  const confirmPassword =
+    String(
+      data.confirmPassword ??
+      data.passwordConfirm ??
+      data.confirm ??
+      ""
+    );
+
+  /* -----------------------------------------
+     VALIDATION
+  ----------------------------------------- */
+
+  if (
+    username.length < 3 ||
+    username.length > 30
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Tên tài khoản phải từ 3–30 ký tự.",
+      },
+      400,
+      null,
+      request
+    );
+  }
+
+  if (
+    !/^[a-zA-Z0-9_]+$/.test(
+      username
+    )
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Tên tài khoản chỉ được dùng chữ cái, số và dấu gạch dưới.",
+      },
+      400,
+      null,
+      request
+    );
+  }
 
   if (!isEmail(email)) {
     return json(
       {
         ok: false,
-        error: "Email không hợp lệ.",
+        error:
+          "Email không hợp lệ.",
       },
       400,
       null,
@@ -192,7 +325,8 @@ async function handleRegister(request, env) {
     return json(
       {
         ok: false,
-        error: "Mật khẩu phải có ít nhất 6 ký tự.",
+        error:
+          "Mật khẩu phải có ít nhất 6 ký tự.",
       },
       400,
       null,
@@ -200,11 +334,14 @@ async function handleRegister(request, env) {
     );
   }
 
-  if (password !== confirmPassword) {
+  if (
+    password !== confirmPassword
+  ) {
     return json(
       {
         ok: false,
-        error: "Mật khẩu nhập lại không khớp.",
+        error:
+          "Mật khẩu nhập lại không khớp.",
       },
       400,
       null,
@@ -216,7 +353,8 @@ async function handleRegister(request, env) {
     return json(
       {
         ok: false,
-        error: "D1 DB chưa được cấu hình.",
+        error:
+          "D1 DB chưa được cấu hình.",
       },
       500,
       null,
@@ -224,19 +362,21 @@ async function handleRegister(request, env) {
     );
   }
 
-  /*
-   * Tạo các bảng app_* trước.
-   * Không phụ thuộc sessions cũ.
-   */
-  await ensureAppTables(env.DB);
+  await ensureAppTables(
+    env.DB
+  );
 
-  const schema = await getUsersSchema(env.DB);
+  const schema =
+    await getUsersSchema(
+      env.DB
+    );
 
   if (!schema.length) {
     return json(
       {
         ok: false,
-        error: "Không tìm thấy bảng users trong D1.",
+        error:
+          "Không tìm thấy bảng users trong D1.",
       },
       500,
       null,
@@ -244,48 +384,67 @@ async function handleRegister(request, env) {
     );
   }
 
-  const emailCol = findColumn(schema, [
-    "email",
-    "mail",
-  ]);
+  /* -----------------------------------------
+     FIND USERS COLUMNS
+  ----------------------------------------- */
 
-  const passwordCol = findColumn(schema, [
-    "password_hash",
-    "passwordHash",
-    "password",
-    "pass_hash",
-    "pass",
-  ]);
+  const usernameCol =
+    findColumn(schema, [
+      "username",
+      "user_name",
+      "account_name",
+      "accountname",
+    ]);
 
-  const saltCol = findColumn(schema, [
-    "password_salt",
-    "passwordSalt",
-    "salt",
-  ]);
+  const emailCol =
+    findColumn(schema, [
+      "email",
+      "mail",
+    ]);
 
-  const idCol = findColumn(schema, [
-    "id",
-    "user_id",
-    "userid",
-  ]);
+  const passwordCol =
+    findColumn(schema, [
+      "password_hash",
+      "passwordHash",
+      "password",
+      "pass_hash",
+      "pass",
+    ]);
 
-  const roleCol = findColumn(schema, [
-    "role",
-    "user_role",
-  ]);
+  const saltCol =
+    findColumn(schema, [
+      "password_salt",
+      "passwordSalt",
+      "salt",
+    ]);
 
-  const balanceCol = findColumn(schema, [
-    "balance",
-    "wallet_balance",
-    "money",
-    "so_du",
-  ]);
+  const idCol =
+    findColumn(schema, [
+      "id",
+      "user_id",
+      "userid",
+    ]);
 
-  const createdCol = findColumn(schema, [
-    "created_at",
-    "createdAt",
-    "created",
-  ]);
+  const roleCol =
+    findColumn(schema, [
+      "role",
+      "user_role",
+    ]);
+
+  const balanceCol =
+    findColumn(schema, [
+      "balance",
+      "wallet_balance",
+      "money",
+      "so_du",
+    ]);
+
+  const createdCol =
+    findColumn(schema, [
+      "created_at",
+      "createdAt",
+      "created",
+    ]);
 
   if (!emailCol || !passwordCol) {
     return json(
@@ -300,20 +459,47 @@ async function handleRegister(request, env) {
     );
   }
 
-  const existing = await env.DB
-    .prepare(
-      `SELECT * FROM users
-       WHERE lower(${qi(emailCol)}) = lower(?)
-       LIMIT 1`
-    )
-    .bind(email)
-    .first();
-
-  if (existing) {
+  /*
+   * Nếu database chưa có username,
+   * không cho đăng ký âm thầm mất username.
+   *
+   * Hãy chạy 0002 trước.
+   */
+  if (!usernameCol) {
     return json(
       {
         ok: false,
-        error: "Email này đã được đăng ký.",
+        error:
+          "Database chưa có cột username. Hãy chạy migration 0002 trước.",
+      },
+      500,
+      null,
+      request
+    );
+  }
+
+  /* -----------------------------------------
+     CHECK EMAIL
+  ----------------------------------------- */
+
+  const existingEmail =
+    await env.DB
+      .prepare(
+        `SELECT *
+         FROM users
+         WHERE lower(${qi(emailCol)}) =
+               lower(?)
+         LIMIT 1`
+      )
+      .bind(email)
+      .first();
+
+  if (existingEmail) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Email này đã được đăng ký.",
       },
       409,
       null,
@@ -321,55 +507,97 @@ async function handleRegister(request, env) {
     );
   }
 
-  /*
-   * Hash password.
-   *
-   * QUAN TRỌNG:
-   * Không bao giờ dùng 120000.
-   */
-  const salt = randomBytes(16);
+  /* -----------------------------------------
+     CHECK USERNAME
+  ----------------------------------------- */
 
-  const hash = await hashPassword(
-    password,
-    salt,
-    PBKDF2_ITERATIONS
-  );
+  const existingUsername =
+    await env.DB
+      .prepare(
+        `SELECT *
+         FROM users
+         WHERE lower(${qi(usernameCol)}) =
+               lower(?)
+         LIMIT 1`
+      )
+      .bind(username)
+      .first();
 
-  /*
-   * Nếu DB có password_salt:
-   *
-   * password_hash = base64url(hash)
-   * password_salt = base64url(salt)
-   *
-   * Nếu DB không có salt:
-   * password = pbkdf2$100000$salt$hash
-   */
+  if (existingUsername) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Tên tài khoản này đã được sử dụng.",
+      },
+      409,
+      null,
+      request
+    );
+  }
+
+  /* -----------------------------------------
+     PASSWORD HASH
+  ----------------------------------------- */
+
+  const salt =
+    randomBytes(16);
+
+  const hash =
+    await hashPassword(
+      password,
+      salt,
+      PBKDF2_ITERATIONS
+    );
+
   const encoded = [
     "pbkdf2",
-    String(PBKDF2_ITERATIONS),
+    String(
+      PBKDF2_ITERATIONS
+    ),
     bytesToB64Url(salt),
     bytesToB64Url(hash),
   ].join("$");
 
   const values = {};
 
-  values[emailCol] = email;
+  values[emailCol] =
+    email;
 
-  if (saltCol) {
-    values[passwordCol] = bytesToB64Url(hash);
-    values[saltCol] = bytesToB64Url(salt);
-  } else {
-    values[passwordCol] = encoded;
-  }
+  values[usernameCol] =
+    username;
 
   /*
-   * Nếu id bắt buộc nhưng không có default,
-   * tự tạo ID.
+   * Có salt riêng:
+   * password_hash = hash
+   * password_salt = salt
    */
+  if (saltCol) {
+    values[passwordCol] =
+      bytesToB64Url(hash);
+
+    values[saltCol] =
+      bytesToB64Url(salt);
+  } else {
+    /*
+     * Không có salt column:
+     * lưu toàn bộ trong password_hash.
+     */
+    values[passwordCol] =
+      encoded;
+  }
+
+  /* -----------------------------------------
+     ID
+  ----------------------------------------- */
+
   if (idCol) {
-    const info = schema.find(
-      c => c.name === idCol
-    );
+    const info =
+      schema.find(
+        c =>
+          c.name ===
+          idCol
+      );
 
     if (
       info &&
@@ -377,51 +605,58 @@ async function handleRegister(request, env) {
       info.dflt_value == null &&
       info.pk === 0
     ) {
-      values[idCol] = randomId();
+      values[idCol] =
+        randomId();
     }
   }
 
-  /*
-   * Role.
-   *
-   * Nếu schema có CHECK role IN (...),
-   * chọn PLAYER/USER/MEMBER nếu có.
-   */
-  if (roleCol) {
-    const tableSql = await getTableSql(
-      env.DB,
-      "users"
-    );
+  /* -----------------------------------------
+     ROLE
+  ----------------------------------------- */
 
-    const role = chooseAllowedRole(tableSql);
+  if (roleCol) {
+    const tableSql =
+      await getTableSql(
+        env.DB,
+        "users"
+      );
+
+    const role =
+      chooseAllowedRole(
+        tableSql
+      );
 
     if (role) {
-      values[roleCol] = role;
+      values[roleCol] =
+        role;
     }
   }
 
-  /*
-   * Số dư mặc định = 0.
-   */
+  /* -----------------------------------------
+     BALANCE
+  ----------------------------------------- */
+
   if (balanceCol) {
-    values[balanceCol] = 0;
+    values[balanceCol] =
+      0;
   }
+
+  /* -----------------------------------------
+     CREATED
+  ----------------------------------------- */
 
   if (createdCol) {
     values[createdCol] =
       new Date().toISOString();
   }
 
-  /*
-   * Không hỏi username.
-   *
-   * Nếu schema cũ có username NOT NULL,
-   * chỉ những schema thật sự bắt buộc mới tự
-   * sinh giá trị từ email để không làm INSERT chết.
-   *
-   * Không tạo thêm field trên giao diện.
-   */
-  for (const column of schema) {
+  /* -----------------------------------------
+     OTHER REQUIRED COLUMNS
+  ----------------------------------------- */
+
+  for (
+    const column of schema
+  ) {
     if (
       !column.notnull ||
       column.dflt_value != null ||
@@ -430,13 +665,21 @@ async function handleRegister(request, env) {
       continue;
     }
 
-    if (values[column.name] !== undefined) {
+    if (
+      values[column.name] !==
+      undefined
+    ) {
       continue;
     }
 
     const name =
-      String(column.name).toLowerCase();
+      String(
+        column.name
+      ).toLowerCase();
 
+    /*
+     * Legacy schema compatibility.
+     */
     if (
       [
         "username",
@@ -447,23 +690,23 @@ async function handleRegister(request, env) {
       ].includes(name)
     ) {
       values[column.name] =
-        email
-          .split("@")[0]
-          .slice(0, 40) || "player";
+        username;
     }
   }
 
-  /*
-   * Kiểm tra toàn bộ NOT NULL trước INSERT.
-   */
-  const missing = schema.filter(column => {
-    return (
-      column.notnull &&
-      column.dflt_value == null &&
-      !column.pk &&
-      values[column.name] === undefined
+  /* -----------------------------------------
+     CHECK REQUIRED
+  ----------------------------------------- */
+
+  const missing =
+    schema.filter(
+      column =>
+        column.notnull &&
+        column.dflt_value == null &&
+        !column.pk &&
+        values[column.name] ===
+          undefined
     );
-  });
 
   if (missing.length) {
     return json(
@@ -472,7 +715,9 @@ async function handleRegister(request, env) {
         error:
           "Schema users còn cột bắt buộc chưa thể xử lý: " +
           missing
-            .map(c => c.name)
+            .map(
+              c => c.name
+            )
             .join(", "),
       },
       500,
@@ -481,23 +726,29 @@ async function handleRegister(request, env) {
     );
   }
 
-  const columns = Object.keys(values);
+  const columns =
+    Object.keys(values);
 
-  const placeholders = columns
-    .map(() => "?")
-    .join(", ");
+  const placeholders =
+    columns
+      .map(() => "?")
+      .join(", ");
 
   const sql =
     `INSERT INTO users (` +
-    columns.map(qi).join(", ") +
-    `) VALUES (${placeholders})`;
+    columns
+      .map(qi)
+      .join(", ") +
+    `)
+     VALUES (${placeholders})`;
 
   try {
     await env.DB
       .prepare(sql)
       .bind(
         ...columns.map(
-          column => values[column]
+          column =>
+            values[column]
         )
       )
       .run();
@@ -520,10 +771,15 @@ async function handleRegister(request, env) {
     );
   }
 
-  const user = await findUserByEmail(
-    env.DB,
-    email
-  );
+  /* -----------------------------------------
+     READ USER AGAIN
+  ----------------------------------------- */
+
+  const user =
+    await findUserByEmail(
+      env.DB,
+      email
+    );
 
   if (!user) {
     return json(
@@ -538,17 +794,25 @@ async function handleRegister(request, env) {
     );
   }
 
-  const session = await createSession(
-    env.DB,
-    user
-  );
+  /* -----------------------------------------
+     CREATE SESSION
+  ----------------------------------------- */
+
+  const session =
+    await createSession(
+      env.DB,
+      user
+    );
 
   return json(
     {
       ok: true,
+
       message:
         "Tạo tài khoản thành công.",
-      user: publicUser(user),
+
+      user:
+        publicUser(user),
     },
     200,
     session.cookie,
@@ -556,19 +820,44 @@ async function handleRegister(request, env) {
   );
 }
 
-
 /* =========================================================
    LOGIN
 ========================================================= */
 
-async function handleLogin(request, env) {
-  const data = await readJson(request);
+async function handleLogin(
+  request,
+  env
+) {
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error:
+          "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
 
-  const email = normalizeEmail(data.email);
+  const data =
+    await readJson(request);
+
+  const email =
+    normalizeEmail(
+      data.email
+    );
+
   const password =
-    String(data.password || "");
+    String(
+      data.password || ""
+    );
 
-  if (!isEmail(email) || !password) {
+  if (
+    !isEmail(email) ||
+    !password
+  ) {
     return json(
       {
         ok: false,
@@ -581,7 +870,9 @@ async function handleLogin(request, env) {
     );
   }
 
-  await ensureAppTables(env.DB);
+  await ensureAppTables(
+    env.DB
+  );
 
   const user =
     await findUserByEmail(
@@ -630,9 +921,12 @@ async function handleLogin(request, env) {
   return json(
     {
       ok: true,
+
       message:
         "Đăng nhập thành công.",
-      user: publicUser(user),
+
+      user:
+        publicUser(user),
     },
     200,
     session.cookie,
@@ -640,36 +934,41 @@ async function handleLogin(request, env) {
   );
 }
 
-
 /* =========================================================
    LOGOUT
 ========================================================= */
 
-async function handleLogout(request, env) {
-  const token =
-    getCookie(
-      request,
-      SESSION_COOKIE
-    );
+async function handleLogout(
+  request,
+  env
+) {
+  if (env.DB) {
+    const token =
+      getCookie(
+        request,
+        SESSION_COOKIE
+      );
 
-  if (token) {
-    const tokenHash =
-      await sha256Hex(token);
+    if (token) {
+      const tokenHash =
+        await sha256Hex(token);
 
-    await env.DB
-      .prepare(
-        `DELETE FROM app_sessions
-         WHERE token_hash = ?`
-      )
-      .bind(tokenHash)
-      .run()
-      .catch(() => {});
+      await env.DB
+        .prepare(
+          `DELETE FROM app_sessions
+           WHERE token_hash = ?`
+        )
+        .bind(tokenHash)
+        .run()
+        .catch(() => {});
+    }
   }
 
   return json(
     {
       ok: true,
-      message: "Đã đăng xuất.",
+      message:
+        "Đã đăng xuất.",
     },
     200,
     deleteCookieHeader(),
@@ -677,13 +976,30 @@ async function handleLogout(request, env) {
   );
 }
 
-
 /* =========================================================
    CURRENT USER
 ========================================================= */
 
-async function handleMe(request, env) {
-  await ensureAppTables(env.DB);
+async function handleMe(
+  request,
+  env
+) {
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error:
+          "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
+
+  await ensureAppTables(
+    env.DB
+  );
 
   const user =
     await getCurrentUser(
@@ -695,7 +1011,8 @@ async function handleMe(request, env) {
     return json(
       {
         ok: true,
-        authenticated: false,
+        authenticated:
+          false,
         user: null,
       },
       200,
@@ -707,8 +1024,10 @@ async function handleMe(request, env) {
   return json(
     {
       ok: true,
-      authenticated: true,
-      user: publicUser(user),
+      authenticated:
+        true,
+      user:
+        publicUser(user),
     },
     200,
     null,
@@ -716,12 +1035,14 @@ async function handleMe(request, env) {
   );
 }
 
-
 /* =========================================================
    USER HELPERS
 ========================================================= */
 
-async function findUserByEmail(db, email) {
+async function findUserByEmail(
+  db,
+  email
+) {
   const schema =
     await getUsersSchema(db);
 
@@ -738,8 +1059,10 @@ async function findUserByEmail(db, email) {
   const row =
     await db
       .prepare(
-        `SELECT * FROM users
-         WHERE lower(${qi(emailCol)}) = lower(?)
+        `SELECT *
+         FROM users
+         WHERE lower(${qi(emailCol)}) =
+               lower(?)
          LIMIT 1`
       )
       .bind(email)
@@ -755,13 +1078,24 @@ async function findUserByEmail(db, email) {
   );
 }
 
-
-function normalizeUserRow(row, schema) {
+function normalizeUserRow(
+  row,
+  schema
+) {
   const idCol =
     findColumn(schema, [
       "id",
       "user_id",
       "userid",
+    ]);
+
+  const usernameCol =
+    findColumn(schema, [
+      "username",
+      "user_name",
+      "account_name",
+      "accountname",
+      "display_name",
     ]);
 
   const emailCol =
@@ -804,27 +1138,44 @@ function normalizeUserRow(row, schema) {
     idCol &&
     row[idCol] != null
       ? String(row[idCol])
-      : String(row[emailCol]);
+      : String(
+          row[emailCol] || ""
+        );
 
   return {
     raw: row,
 
     userId,
 
+    username:
+      usernameCol
+        ? String(
+            row[usernameCol] ||
+              ""
+          )
+        : "",
+
     email:
-      String(row[emailCol] || ""),
+      emailCol
+        ? String(
+            row[emailCol] ||
+              ""
+          )
+        : "",
 
     passwordStored:
       passwordCol
         ? String(
-            row[passwordCol] ?? ""
+            row[passwordCol] ??
+              ""
           )
         : "",
 
     passwordSalt:
       saltCol
         ? String(
-            row[saltCol] ?? ""
+            row[saltCol] ??
+              ""
           )
         : "",
 
@@ -832,33 +1183,46 @@ function normalizeUserRow(row, schema) {
       roleCol
         ? String(
             row[roleCol] ??
-            "PLAYER"
+              "USER"
           )
-        : "PLAYER",
+        : "USER",
 
     balance:
       balanceCol
         ? Number(
-            row[balanceCol] ?? 0
+            row[balanceCol] ??
+              0
           )
         : 0,
   };
 }
 
-
-function publicUser(user) {
+function publicUser(
+  user
+) {
   return {
-    id: user.userId,
-    email: user.email,
+    id:
+      user.userId,
+
+    username:
+      user.username ||
+      "Player",
+
+    email:
+      user.email,
+
     role:
-      user.role || "PLAYER",
+      user.role ||
+      "USER",
+
     balance:
-      Number.isFinite(user.balance)
+      Number.isFinite(
+        user.balance
+      )
         ? user.balance
         : 0,
   };
 }
-
 
 /* =========================================================
    PASSWORD
@@ -867,7 +1231,8 @@ function publicUser(user) {
 async function hashPassword(
   password,
   salt,
-  iterations = PBKDF2_ITERATIONS
+  iterations =
+    PBKDF2_ITERATIONS
 ) {
   const encoder =
     new TextEncoder();
@@ -887,17 +1252,21 @@ async function hashPassword(
     await crypto.subtle.deriveBits(
       {
         name: "PBKDF2",
+
         salt,
+
         iterations,
+
         hash: "SHA-256",
       },
       key,
       256
     );
 
-  return new Uint8Array(bits);
+  return new Uint8Array(
+    bits
+  );
 }
-
 
 async function verifyStoredPassword(
   user,
@@ -906,9 +1275,10 @@ async function verifyStoredPassword(
   const stored =
     user.passwordStored;
 
-  /*
-   * Schema có salt riêng.
-   */
+  /* -----------------------------------------
+     SALT COLUMN
+  ----------------------------------------- */
+
   if (
     user.passwordSalt &&
     stored
@@ -919,7 +1289,9 @@ async function verifyStoredPassword(
       );
 
     const expected =
-      b64UrlToBytes(stored);
+      b64UrlToBytes(
+        stored
+      );
 
     if (
       salt.length &&
@@ -939,10 +1311,12 @@ async function verifyStoredPassword(
     }
   }
 
-  /*
-   * Schema self-contained:
-   * pbkdf2$iterations$salt$hash
-   */
+  /* -----------------------------------------
+     SELF-CONTAINED FORMAT
+     
+     pbkdf2$100000$salt$hash
+  ----------------------------------------- */
+
   if (
     stored.startsWith(
       "pbkdf2$"
@@ -951,26 +1325,26 @@ async function verifyStoredPassword(
     const parts =
       stored.split("$");
 
-    if (parts.length === 4) {
+    if (
+      parts.length === 4
+    ) {
       const iterations =
         Number(parts[1]);
 
       const salt =
-        b64UrlToBytes(parts[2]);
+        b64UrlToBytes(
+          parts[2]
+        );
 
       const expected =
-        b64UrlToBytes(parts[3]);
+        b64UrlToBytes(
+          parts[3]
+        );
 
-      /*
-       * Không cho phép hash mới dùng
-       * hơn 100000 iterations.
-       *
-       * Các record cũ <= 100000 vẫn
-       * được verify.
-       */
       if (
         iterations > 0 &&
-        iterations <= 100000 &&
+        iterations <=
+          PBKDF2_ITERATIONS &&
         salt.length &&
         expected.length
       ) {
@@ -992,39 +1366,43 @@ async function verifyStoredPassword(
   return false;
 }
 
-
 /* =========================================================
    SESSION
 ========================================================= */
 
-async function createSession(db, user) {
-  const token = bytesToB64Url(
-    randomBytes(32)
-  );
+async function createSession(
+  db,
+  user
+) {
+  const token =
+    bytesToB64Url(
+      randomBytes(32)
+    );
 
   const tokenHash =
-    await sha256Hex(token);
+    await sha256Hex(
+      token
+    );
 
-  const now = Date.now();
+  const now =
+    Date.now();
 
   const createdAt =
-    new Date(now).toISOString();
+    new Date(
+      now
+    ).toISOString();
 
   const expiresAt =
     new Date(
       now +
-      SESSION_TTL_SECONDS * 1000
+        SESSION_TTL_SECONDS *
+          1000
     ).toISOString();
 
-  /*
-   * Đọc schema app_sessions THỰC TẾ
-   * đang có trong D1.
-   *
-   * Không giả định bảng phải có
-   * đúng schema mà Worker tự tạo.
-   */
   const schema =
-    await getAppSessionsSchema(db);
+    await getAppSessionsSchema(
+      db
+    );
 
   if (!schema.length) {
     throw new Error(
@@ -1034,9 +1412,8 @@ async function createSession(db, user) {
 
   const values = {};
 
-  /*
-   * TOKEN HASH
-   */
+  /* TOKEN HASH */
+
   const tokenHashCol =
     findColumn(schema, [
       "token_hash",
@@ -1050,9 +1427,8 @@ async function createSession(db, user) {
       tokenHash;
   }
 
-  /*
-   * USER ID
-   */
+  /* USER ID */
+
   const userIdCol =
     findColumn(schema, [
       "user_id",
@@ -1064,16 +1440,13 @@ async function createSession(db, user) {
 
   if (userIdCol) {
     values[userIdCol] =
-      String(user.userId);
+      String(
+        user.userId
+      );
   }
 
-  /*
-   * EMAIL
-   *
-   * Đây chính là phần sửa lỗi:
-   *
-   * app_sessions.email NOT NULL
-   */
+  /* EMAIL */
+
   const emailCol =
     findColumn(schema, [
       "email",
@@ -1082,12 +1455,13 @@ async function createSession(db, user) {
 
   if (emailCol) {
     values[emailCol] =
-      String(user.email || "");
+      String(
+        user.email || ""
+      );
   }
 
-  /*
-   * EXPIRATION
-   */
+  /* EXPIRES */
+
   const expiresCol =
     findColumn(schema, [
       "expires_at",
@@ -1101,9 +1475,8 @@ async function createSession(db, user) {
       expiresAt;
   }
 
-  /*
-   * CREATED AT
-   */
+  /* CREATED */
+
   const createdCol =
     findColumn(schema, [
       "created_at",
@@ -1116,10 +1489,8 @@ async function createSession(db, user) {
       createdAt;
   }
 
-  /*
-   * Nếu schema có token dạng plain
-   * thì vẫn hỗ trợ.
-   */
+  /* PLAIN TOKEN */
+
   const tokenCol =
     findColumn(schema, [
       "token",
@@ -1129,15 +1500,15 @@ async function createSession(db, user) {
 
   if (
     tokenCol &&
-    values[tokenCol] === undefined
+    values[tokenCol] ===
+      undefined
   ) {
     values[tokenCol] =
       token;
   }
 
-  /*
-   * Một số schema cũ dùng session_id.
-   */
+  /* SESSION ID */
+
   const sessionIdCol =
     findColumn(schema, [
       "session_id",
@@ -1146,7 +1517,8 @@ async function createSession(db, user) {
 
   if (
     sessionIdCol &&
-    values[sessionIdCol] === undefined
+    values[sessionIdCol] ===
+      undefined
   ) {
     const info =
       schema.find(
@@ -1158,7 +1530,8 @@ async function createSession(db, user) {
     if (
       info &&
       info.notnull &&
-      info.dflt_value == null &&
+      info.dflt_value ==
+        null &&
       info.pk === 0
     ) {
       values[sessionIdCol] =
@@ -1166,51 +1539,50 @@ async function createSession(db, user) {
     }
   }
 
-  /*
-   * Kiểm tra toàn bộ NOT NULL column
-   * của app_sessions.
-   *
-   * Những column có DEFAULT hoặc PK
-   * tự tăng thì SQLite tự xử lý.
-   */
+  /* -----------------------------------------
+     REQUIRED COLUMNS
+  ----------------------------------------- */
+
   const missing =
-    schema.filter(column => {
-      if (!column.notnull) {
-        return false;
-      }
+    schema.filter(
+      column => {
+        if (
+          !column.notnull
+        ) {
+          return false;
+        }
 
-      if (
-        column.dflt_value != null
-      ) {
-        return false;
-      }
+        if (
+          column.dflt_value !=
+          null
+        ) {
+          return false;
+        }
 
-      if (column.pk) {
-        return false;
-      }
+        if (column.pk) {
+          return false;
+        }
 
-      return (
-        values[column.name] ===
-        undefined
-      );
-    });
+        return (
+          values[
+            column.name
+          ] === undefined
+        );
+      }
+    );
 
   if (missing.length) {
     throw new Error(
       "Schema app_sessions còn cột bắt buộc chưa thể xử lý: " +
-      missing
-        .map(
-          column => column.name
-        )
-        .join(", ")
+        missing
+          .map(
+            column =>
+              column.name
+          )
+          .join(", ")
     );
   }
 
-  /*
-   * Nếu schema không có token_hash
-   * và cũng không có token,
-   * session không thể hoạt động an toàn.
-   */
   if (
     !tokenHashCol &&
     !tokenCol
@@ -1233,7 +1605,8 @@ async function createSession(db, user) {
     columns
       .map(qi)
       .join(", ") +
-    `) VALUES (${placeholders})`;
+    `)
+     VALUES (${placeholders})`;
 
   try {
     await db
@@ -1253,7 +1626,7 @@ async function createSession(db, user) {
 
     throw new Error(
       "Không thể tạo phiên đăng nhập: " +
-      safeError(error)
+        safeError(error)
     );
   }
 
@@ -1263,90 +1636,141 @@ async function createSession(db, user) {
   };
 }
 
-
-async function getCurrentUser(request, db) {
-  const token = getCookie(request, SESSION_COOKIE);
+async function getCurrentUser(
+  request,
+  db
+) {
+  const token =
+    getCookie(
+      request,
+      SESSION_COOKIE
+    );
 
   if (!token) {
     return null;
   }
 
-  const tokenHash = await sha256Hex(token);
+  const tokenHash =
+    await sha256Hex(
+      token
+    );
 
   const sessionSchema =
-    await getAppSessionsSchema(db);
+    await getAppSessionsSchema(
+      db
+    );
 
   if (!sessionSchema.length) {
     return null;
   }
 
-  const tokenHashCol = findColumn(sessionSchema, [
-    "token_hash",
-    "tokenHash",
-    "session_token_hash",
-    "sessionTokenHash",
-  ]);
+  const tokenHashCol =
+    findColumn(
+      sessionSchema,
+      [
+        "token_hash",
+        "tokenHash",
+        "session_token_hash",
+        "sessionTokenHash",
+      ]
+    );
 
-  const tokenCol = findColumn(sessionSchema, [
-    "token",
-    "session_token",
-    "sessionToken",
-  ]);
+  const tokenCol =
+    findColumn(
+      sessionSchema,
+      [
+        "token",
+        "session_token",
+        "sessionToken",
+      ]
+    );
 
-  const userIdCol = findColumn(sessionSchema, [
-    "user_id",
-    "userId",
-    "userid",
-    "account_id",
-    "accountId",
-  ]);
+  const userIdCol =
+    findColumn(
+      sessionSchema,
+      [
+        "user_id",
+        "userId",
+        "userid",
+        "account_id",
+        "accountId",
+      ]
+    );
 
-  const emailCol = findColumn(sessionSchema, [
-    "email",
-    "mail",
-  ]);
+  const emailCol =
+    findColumn(
+      sessionSchema,
+      [
+        "email",
+        "mail",
+      ]
+    );
 
-  const expiresCol = findColumn(sessionSchema, [
-    "expires_at",
-    "expiresAt",
-    "expiry",
-    "expired_at",
-  ]);
+  const expiresCol =
+    findColumn(
+      sessionSchema,
+      [
+        "expires_at",
+        "expiresAt",
+        "expiry",
+        "expired_at",
+      ]
+    );
 
   let whereSql = "";
   let whereValue = "";
 
   if (tokenHashCol) {
-    whereSql = `${qi(tokenHashCol)} = ?`;
-    whereValue = tokenHash;
+    whereSql =
+      `${qi(tokenHashCol)} = ?`;
+
+    whereValue =
+      tokenHash;
   } else if (tokenCol) {
-    whereSql = `${qi(tokenCol)} = ?`;
-    whereValue = token;
+    whereSql =
+      `${qi(tokenCol)} = ?`;
+
+    whereValue =
+      token;
   } else {
     return null;
   }
 
-  const session = await db
-    .prepare(
-      `SELECT *
-       FROM app_sessions
-       WHERE ${whereSql}
-       LIMIT 1`
-    )
-    .bind(whereValue)
-    .first();
+  const session =
+    await db
+      .prepare(
+        `SELECT *
+         FROM app_sessions
+         WHERE ${whereSql}
+         LIMIT 1`
+      )
+      .bind(
+        whereValue
+      )
+      .first();
 
   if (!session) {
     return null;
   }
 
+  /* -----------------------------------------
+     CHECK EXPIRATION
+  ----------------------------------------- */
+
   if (expiresCol) {
-    const expires = Date.parse(
-      String(session[expiresCol] || "")
-    );
+    const expires =
+      Date.parse(
+        String(
+          session[
+            expiresCol
+          ] || ""
+        )
+      );
 
     if (
-      !Number.isFinite(expires) ||
+      !Number.isFinite(
+        expires
+      ) ||
       expires <= Date.now()
     ) {
       await db
@@ -1354,7 +1778,9 @@ async function getCurrentUser(request, db) {
           `DELETE FROM app_sessions
            WHERE ${whereSql}`
         )
-        .bind(whereValue)
+        .bind(
+          whereValue
+        )
         .run()
         .catch(() => {});
 
@@ -1362,66 +1788,99 @@ async function getCurrentUser(request, db) {
     }
   }
 
+  /* -----------------------------------------
+     USER SCHEMA
+  ----------------------------------------- */
+
   const userSchema =
-    await getUsersSchema(db);
+    await getUsersSchema(
+      db
+    );
+
+  if (!userSchema.length) {
+    return null;
+  }
 
   const userIdUserCol =
-    findColumn(userSchema, [
-      "id",
-      "user_id",
-      "userid",
-    ]);
+    findColumn(
+      userSchema,
+      [
+        "id",
+        "user_id",
+        "userid",
+      ]
+    );
 
   let row = null;
 
-  /*
-   * Ưu tiên tìm user bằng user_id
-   */
+  /* -----------------------------------------
+     FIND BY USER ID
+  ----------------------------------------- */
+
   if (
     userIdCol &&
     userIdUserCol &&
-    session[userIdCol] != null
+    session[userIdCol] !=
+      null
   ) {
-    row = await db
-      .prepare(
-        `SELECT *
-         FROM users
-         WHERE ${qi(userIdUserCol)} = ?
-         LIMIT 1`
-      )
-      .bind(
-        String(session[userIdCol])
-      )
-      .first();
+    row =
+      await db
+        .prepare(
+          `SELECT *
+           FROM users
+           WHERE ${qi(
+             userIdUserCol
+           )} = ?
+           LIMIT 1`
+        )
+        .bind(
+          String(
+            session[
+              userIdCol
+            ]
+          )
+        )
+        .first();
   }
 
-  /*
-   * Nếu không tìm được thì tìm bằng email
-   */
+  /* -----------------------------------------
+     FIND BY EMAIL
+  ----------------------------------------- */
+
   if (
     !row &&
     emailCol &&
     session[emailCol]
   ) {
     const userEmailCol =
-      findColumn(userSchema, [
-        "email",
-        "mail",
-      ]);
+      findColumn(
+        userSchema,
+        [
+          "email",
+          "mail",
+        ]
+      );
 
     if (userEmailCol) {
-      row = await db
-        .prepare(
-          `SELECT *
-           FROM users
-           WHERE lower(${qi(userEmailCol)}) =
-                 lower(?)
-           LIMIT 1`
-        )
-        .bind(
-          String(session[emailCol])
-        )
-        .first();
+      row =
+        await db
+          .prepare(
+            `SELECT *
+             FROM users
+             WHERE lower(${qi(
+               userEmailCol
+             )}) =
+                   lower(?)
+             LIMIT 1`
+          )
+          .bind(
+            String(
+              session[
+                emailCol
+              ]
+            )
+          )
+          .first();
     }
   }
 
@@ -1435,7 +1894,6 @@ async function getCurrentUser(request, db) {
   );
 }
 
-
 /* =========================================================
    TOURNAMENT
 ========================================================= */
@@ -1444,7 +1902,22 @@ async function handleTournament(
   env,
   request
 ) {
-  await ensureAppTables(env.DB);
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error:
+          "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
+
+  await ensureAppTables(
+    env.DB
+  );
 
   let tournament =
     await env.DB
@@ -1476,16 +1949,28 @@ async function handleTournament(
       )
       .bind(
         "Giải 2vs2 chủ nhật tới",
+
         "Giải đấu Tử Chiến Mùa 1 — thể thức 2vs2.",
+
         "OPEN",
+
         16,
+
         Number(
           env.ENTRY_FEE || 0
         ),
+
         "Giải 2vs2 chủ nhật tới",
-        env.BANK_NAME || "",
-        env.BANK_ACCOUNT || "",
-        env.BANK_OWNER || "",
+
+        env.BANK_NAME ||
+          "",
+
+        env.BANK_ACCOUNT ||
+          "",
+
+        env.BANK_OWNER ||
+          "",
+
         new Date().toISOString()
       )
       .run();
@@ -1508,15 +1993,20 @@ async function handleTournament(
          FROM app_teams
          WHERE tournament_id = ?`
       )
-      .bind(tournament.id)
+      .bind(
+        tournament.id
+      )
       .first();
 
   const registered =
-    Number(count?.c || 0);
+    Number(
+      count?.c || 0
+    );
 
   const slots =
     Number(
-      tournament.slots || 16
+      tournament.slots ||
+        16
     );
 
   return json(
@@ -1525,7 +2015,9 @@ async function handleTournament(
 
       tournament: {
         id:
-          Number(tournament.id),
+          Number(
+            tournament.id
+          ),
 
         name:
           tournament.name,
@@ -1534,12 +2026,14 @@ async function handleTournament(
           tournament.description,
 
         status:
-          registered < slots
+          registered <
+          slots
             ? "OPEN"
             : "FULL",
 
         statusText:
-          registered < slots
+          registered <
+          slots
             ? "CÒN SLOT"
             : "ĐÃ ĐỦ SLOT",
 
@@ -1550,13 +2044,14 @@ async function handleTournament(
         remaining:
           Math.max(
             0,
-            slots - registered
+            slots -
+              registered
           ),
 
         entryFee:
           Number(
             tournament.entry_fee ||
-            0
+              0
           ),
 
         scheduledText:
@@ -1586,7 +2081,6 @@ async function handleTournament(
   );
 }
 
-
 /* =========================================================
    TEAM REGISTER
 ========================================================= */
@@ -1595,6 +2089,19 @@ async function handleTeamRegister(
   request,
   env
 ) {
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error:
+          "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
+
   const user =
     await getCurrentUser(
       request,
@@ -1630,12 +2137,13 @@ async function handleTeamRegister(
   const contactEmail =
     normalizeEmail(
       data.contactEmail ||
-      user.email
+        user.email
     );
 
   const player2Email =
     normalizeEmail(
-      data.player2Email || ""
+      data.player2Email ||
+        ""
     );
 
   if (
@@ -1654,7 +2162,11 @@ async function handleTeamRegister(
     );
   }
 
-  if (!isEmail(contactEmail)) {
+  if (
+    !isEmail(
+      contactEmail
+    )
+  ) {
     return json(
       {
         ok: false,
@@ -1669,7 +2181,9 @@ async function handleTeamRegister(
 
   if (
     player2Email &&
-    !isEmail(player2Email)
+    !isEmail(
+      player2Email
+    )
   ) {
     return json(
       {
@@ -1683,7 +2197,9 @@ async function handleTeamRegister(
     );
   }
 
-  await ensureAppTables(env.DB);
+  await ensureAppTables(
+    env.DB
+  );
 
   const tournament =
     await env.DB
@@ -1715,18 +2231,26 @@ async function handleTeamRegister(
          FROM app_teams
          WHERE tournament_id = ?`
       )
-      .bind(tournament.id)
+      .bind(
+        tournament.id
+      )
       .first();
 
   const registered =
-    Number(count?.c || 0);
+    Number(
+      count?.c || 0
+    );
 
   const slots =
     Number(
-      tournament.slots || 16
+      tournament.slots ||
+        16
     );
 
-  if (registered >= slots) {
+  if (
+    registered >=
+    slots
+  ) {
     return json(
       {
         ok: false,
@@ -1747,13 +2271,18 @@ async function handleTeamRegister(
          WHERE tournament_id = ?
          AND (
            owner_user_id = ?
-           OR lower(contact_email) = lower(?)
+           OR lower(contact_email) =
+              lower(?)
          )
          LIMIT 1`
       )
       .bind(
         tournament.id,
-        String(user.userId),
+
+        String(
+          user.userId
+        ),
+
         contactEmail
       )
       .first();
@@ -1793,11 +2322,19 @@ async function handleTeamRegister(
         )
         .bind(
           tournament.id,
-          String(user.userId),
+
+          String(
+            user.userId
+          ),
+
           teamName,
+
           logoUrl,
+
           contactEmail,
+
           player2Email,
+
           new Date().toISOString()
         )
         .run();
@@ -1823,6 +2360,7 @@ async function handleTeamRegister(
   return json(
     {
       ok: true,
+
       message:
         "Đăng ký team thành công. Vui lòng hoàn tất thanh toán.",
 
@@ -1844,7 +2382,6 @@ async function handleTeamRegister(
   );
 }
 
-
 /* =========================================================
    RANKING
 ========================================================= */
@@ -1853,7 +2390,22 @@ async function handleRanking(
   env,
   request
 ) {
-  await ensureAppTables(env.DB);
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error:
+          "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
+
+  await ensureAppTables(
+    env.DB
+  );
 
   const rows =
     await env.DB
@@ -1881,38 +2433,49 @@ async function handleRanking(
       ok: true,
 
       ranking:
-        (rows.results || [])
-          .map((row, index) => ({
-            rank: index + 1,
+        (
+          rows.results ||
+          []
+        ).map(
+          (
+            row,
+            index
+          ) => ({
+            rank:
+              index + 1,
 
             teamName:
               row.team_name,
 
             logoUrl:
-              row.logo_url || "",
+              row.logo_url ||
+              "",
 
             points:
               Number(
-                row.points || 0
+                row.points ||
+                  0
               ),
 
             wins:
               Number(
-                row.wins || 0
+                row.wins ||
+                  0
               ),
 
             losses:
               Number(
-                row.losses || 0
+                row.losses ||
+                  0
               ),
-          })),
+          })
+        ),
     },
     200,
     null,
     request
   );
 }
-
 
 /* =========================================================
    PAYMENT WEBHOOK
@@ -1977,8 +2540,8 @@ async function handlePaymentWebhook(
   const reference =
     String(
       data.reference ||
-      data.transactionId ||
-      ""
+        data.transactionId ||
+        ""
     );
 
   if (
@@ -2002,22 +2565,56 @@ async function handlePaymentWebhook(
     );
   }
 
-  await ensureAppTables(env.DB);
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error:
+          "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
 
-  await env.DB
-    .prepare(
-      `UPDATE app_teams
-       SET
-         payment_status = ?,
-         payment_reference = ?
-       WHERE id = ?`
-    )
-    .bind(
-      status,
-      reference,
-      teamId
-    )
-    .run();
+  await ensureAppTables(
+    env.DB
+  );
+
+  const result =
+    await env.DB
+      .prepare(
+        `UPDATE app_teams
+         SET
+           payment_status = ?,
+           payment_reference = ?
+         WHERE id = ?`
+      )
+      .bind(
+        status,
+        reference,
+        teamId
+      )
+      .run();
+
+  if (
+    Number(
+      result.meta?.changes ||
+        0
+    ) === 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không tìm thấy team.",
+      },
+      404,
+      null,
+      request
+    );
+  }
 
   return json(
     {
@@ -2029,21 +2626,24 @@ async function handlePaymentWebhook(
   );
 }
 
-
 /* =========================================================
    DATABASE
 ========================================================= */
 
-async function ensureAppTables(db) {
+async function ensureAppTables(
+  db
+) {
   /*
-   * Các bảng app_* hoàn toàn riêng,
-   * không phá schema users cũ.
+   * Các bảng app_* tách khỏi
+   * schema cũ.
    */
+
   await db.batch([
     db.prepare(`
       CREATE TABLE IF NOT EXISTS app_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL,
+        email TEXT NOT NULL DEFAULT '',
         token_hash TEXT NOT NULL UNIQUE,
         expires_at TEXT NOT NULL,
         created_at TEXT NOT NULL
@@ -2085,24 +2685,68 @@ async function ensureAppTables(db) {
     `),
   ]);
 
-  /*
-   * Quan trọng:
-   *
-   * Một số schema cũ có trigger:
-   *
-   * users -> audit_logs
-   *
-   * nhưng audit_logs có thể thiếu hoặc thiếu
-   * column mà trigger cần.
-   *
-   * Không return sớm chỉ vì bảng đã tồn tại.
-   * Luôn kiểm tra trigger + columns.
-   */
-  await ensureAuditLogs(db);
+  await ensureAppSessionColumns(
+    db
+  );
+
+  await ensureAuditLogs(
+    db
+  );
 }
 
+/* =========================================================
+   APP SESSION SCHEMA REPAIR
+========================================================= */
 
-async function ensureAuditLogs(db) {
+async function ensureAppSessionColumns(
+  db
+) {
+  const info =
+    await db
+      .prepare(
+        `PRAGMA table_info(app_sessions)`
+      )
+      .all();
+
+  const columns =
+    new Set(
+      (
+        info.results ||
+        []
+      ).map(
+        row =>
+          String(
+            row.name
+          ).toLowerCase()
+      )
+    );
+
+  if (
+    !columns.has("email")
+  ) {
+    try {
+      await db
+        .prepare(
+          `ALTER TABLE app_sessions
+           ADD COLUMN email TEXT NOT NULL DEFAULT ''`
+        )
+        .run();
+    } catch (error) {
+      console.error(
+        "APP SESSION EMAIL COLUMN:",
+        safeError(error)
+      );
+    }
+  }
+}
+
+/* =========================================================
+   AUDIT LOGS
+========================================================= */
+
+async function ensureAuditLogs(
+  db
+) {
   const triggers =
     await db
       .prepare(
@@ -2123,22 +2767,22 @@ async function ensureAuditLogs(db) {
 
   for (
     const trigger
-    of triggers.results || []
+    of triggers.results ||
+    []
   ) {
     const sql =
-      String(trigger.sql || "");
+      String(
+        trigger.sql || ""
+      );
 
     if (
-      !/audit_logs/i.test(sql)
+      !/audit_logs/i.test(
+        sql
+      )
     ) {
       continue;
     }
 
-    /*
-     * Lấy columns trong:
-     *
-     * INSERT INTO audit_logs (...)
-     */
     const match =
       sql.match(
         /INSERT\s+INTO\s+(?:["'`])?audit_logs(?:["'`])?\s*\(([^)]+)\)/i
@@ -2165,15 +2809,13 @@ async function ensureAuditLogs(db) {
           name
         )
       ) {
-        required.add(name);
+        required.add(
+          name
+        );
       }
     }
   }
 
-  /*
-   * Nếu chưa có audit_logs,
-   * tạo bảng tương thích.
-   */
   const exists =
     await db
       .prepare(
@@ -2188,13 +2830,19 @@ async function ensureAuditLogs(db) {
   if (!exists) {
     const columns = [
       `"id" INTEGER PRIMARY KEY AUTOINCREMENT`,
-      ...[...required]
+
+      ...[
+        ...required,
+      ]
         .filter(
-          name => name !== "id"
+          name =>
+            name !== "id"
         )
         .map(
           name =>
-            `${qi(name)} TEXT`
+            `${qi(
+              name
+            )} TEXT`
         ),
     ];
 
@@ -2208,10 +2856,6 @@ async function ensureAuditLogs(db) {
     return;
   }
 
-  /*
-   * Nếu bảng đã tồn tại,
-   * kiểm tra columns hiện tại.
-   */
   const info =
     await db
       .prepare(
@@ -2221,32 +2865,31 @@ async function ensureAuditLogs(db) {
 
   const existingColumns =
     new Set(
-      (info.results || [])
-        .map(
-          row =>
-            String(row.name)
-              .toLowerCase()
-        )
+      (
+        info.results ||
+        []
+      ).map(
+        row =>
+          String(
+            row.name
+          ).toLowerCase()
+      )
     );
 
-  /*
-   * Thiếu column nào thì ALTER TABLE ADD COLUMN.
-   */
   for (
     const name
     of required
   ) {
     if (
       existingColumns.has(
-        String(name).toLowerCase()
+        String(
+          name
+        ).toLowerCase()
       )
     ) {
       continue;
     }
 
-    /*
-     * id không tự add.
-     */
     if (name === "id") {
       continue;
     }
@@ -2255,14 +2898,12 @@ async function ensureAuditLogs(db) {
       await db
         .prepare(
           `ALTER TABLE audit_logs
-           ADD COLUMN ${qi(name)} TEXT`
+           ADD COLUMN ${qi(
+             name
+           )} TEXT`
         )
         .run();
     } catch (error) {
-      /*
-       * Nếu race-condition khiến column vừa
-       * được thêm bởi request khác thì bỏ qua.
-       */
       console.error(
         "AUDIT COLUMN:",
         name,
@@ -2272,12 +2913,13 @@ async function ensureAuditLogs(db) {
   }
 }
 
-
 /* =========================================================
    SCHEMA
 ========================================================= */
 
-async function getUsersSchema(db) {
+async function getUsersSchema(
+  db
+) {
   const result =
     await db
       .prepare(
@@ -2285,11 +2927,14 @@ async function getUsersSchema(db) {
       )
       .all();
 
-  return result.results || [];
+  return (
+    result.results || []
+  );
 }
 
-
-async function getAppSessionsSchema(db) {
+async function getAppSessionsSchema(
+  db
+) {
   const result =
     await db
       .prepare(
@@ -2297,9 +2942,10 @@ async function getAppSessionsSchema(db) {
       )
       .all();
 
-  return result.results || [];
+  return (
+    result.results || []
+  );
 }
-
 
 async function getTableSql(
   db,
@@ -2314,14 +2960,15 @@ async function getTableSql(
          AND name = ?
          LIMIT 1`
       )
-      .bind(tableName)
+      .bind(
+        tableName
+      )
       .first();
 
   return String(
     row?.sql || ""
   );
 }
-
 
 function findColumn(
   schema,
@@ -2345,8 +2992,9 @@ function findColumn(
   ) {
     const found =
       map.get(
-        String(name)
-          .toLowerCase()
+        String(
+          name
+        ).toLowerCase()
       );
 
     if (found) {
@@ -2357,12 +3005,11 @@ function findColumn(
   return null;
 }
 
-
 function chooseAllowedRole(
   sql
 ) {
   if (!sql) {
-    return "PLAYER";
+    return "USER";
   }
 
   const match =
@@ -2371,7 +3018,7 @@ function chooseAllowedRole(
     );
 
   if (!match) {
-    return "PLAYER";
+    return "USER";
   }
 
   const allowed =
@@ -2384,7 +3031,7 @@ function chooseAllowedRole(
     );
 
   if (!allowed.length) {
-    return "PLAYER";
+    return "USER";
   }
 
   const preferred = [
@@ -2401,29 +3048,30 @@ function chooseAllowedRole(
     of preferred
   ) {
     if (
-      allowed.includes(role)
+      allowed.includes(
+        role
+      )
     ) {
       return role;
     }
   }
 
-  /*
-   * Nếu schema chỉ cho một role,
-   * dùng role đầu tiên hợp lệ.
-   */
   return allowed[0];
 }
-
 
 /* =========================================================
    CRYPTO
 ========================================================= */
 
-async function sha256Hex(value) {
+async function sha256Hex(
+  value
+) {
   const data =
-    typeof value === "string"
-      ? new TextEncoder()
-          .encode(value)
+    typeof value ===
+    "string"
+      ? new TextEncoder().encode(
+          value
+        )
       : value;
 
   const digest =
@@ -2433,27 +3081,36 @@ async function sha256Hex(value) {
     );
 
   return [
-    ...new Uint8Array(digest),
+    ...new Uint8Array(
+      digest
+    ),
   ]
     .map(
       byte =>
         byte
           .toString(16)
-          .padStart(2, "0")
+          .padStart(
+            2,
+            "0"
+          )
     )
     .join("");
 }
 
-
-function randomBytes(length) {
+function randomBytes(
+  length
+) {
   const bytes =
-    new Uint8Array(length);
+    new Uint8Array(
+      length
+    );
 
-  crypto.getRandomValues(bytes);
+  crypto.getRandomValues(
+    bytes
+  );
 
   return bytes;
 }
-
 
 function timingSafeEqual(
   a,
@@ -2481,19 +3138,19 @@ function timingSafeEqual(
   return result === 0;
 }
 
-
 function timingSafeStringEqual(
   a,
   b
 ) {
   return timingSafeEqual(
-    new TextEncoder()
-      .encode(a),
-    new TextEncoder()
-      .encode(b)
+    new TextEncoder().encode(
+      a
+    ),
+    new TextEncoder().encode(
+      b
+    )
   );
 }
-
 
 function bytesToB64Url(
   bytes
@@ -2511,11 +3168,19 @@ function bytesToB64Url(
   }
 
   return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
+    .replace(
+      /\+/g,
+      "-"
+    )
+    .replace(
+      /\//g,
+      "_"
+    )
+    .replace(
+      /=+$/g,
+      ""
+    );
 }
-
 
 function b64UrlToBytes(
   value
@@ -2554,7 +3219,6 @@ function b64UrlToBytes(
   }
 }
 
-
 /* =========================================================
    GENERAL HELPERS
 ========================================================= */
@@ -2569,19 +3233,29 @@ function normalizeEmail(
     .toLowerCase();
 }
 
-
-function isEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    .test(value);
+function normalizeUsername(
+  value
+) {
+  return String(
+    value || ""
+  )
+    .trim()
+    .toLowerCase();
 }
 
+function isEmail(
+  value
+) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value
+  );
+}
 
 function randomId() {
   return bytesToB64Url(
     randomBytes(16)
   );
 }
-
 
 async function readJson(
   request
@@ -2594,7 +3268,9 @@ async function readJson(
   }
 
   try {
-    return JSON.parse(text);
+    return JSON.parse(
+      text
+    );
   } catch {
     throw new Error(
       "Dữ liệu gửi lên không phải JSON hợp lệ."
@@ -2602,8 +3278,9 @@ async function readJson(
   }
 }
 
-
-function qi(identifier) {
+function qi(
+  identifier
+) {
   return `"${String(
     identifier
   ).replaceAll(
@@ -2612,20 +3289,24 @@ function qi(identifier) {
   )}"`;
 }
 
-
-function safeError(error) {
+function safeError(
+  error
+) {
   const message =
     String(
       error?.message ||
-      error ||
-      "Lỗi không xác định"
+        error ||
+        "Lỗi không xác định"
     );
 
-  return message.length > 500
-    ? message.slice(0, 500)
+  return message.length >
+    500
+    ? message.slice(
+        0,
+        500
+      )
     : message;
 }
-
 
 /* =========================================================
    COOKIE / HTTP
@@ -2635,27 +3316,37 @@ function sessionCookie(
   token
 ) {
   return (
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}` +
+    `${SESSION_COOKIE}=${encodeURIComponent(
+      token
+    )}` +
+
     `; Max-Age=${SESSION_TTL_SECONDS}` +
+
     `; Path=/` +
+
     `; HttpOnly` +
+
     `; Secure` +
+
     `; SameSite=Lax`
   );
 }
-
 
 function deleteCookieHeader() {
   return (
     `${SESSION_COOKIE}=` +
+
     `; Max-Age=0` +
+
     `; Path=/` +
+
     `; HttpOnly` +
+
     `; Secure` +
+
     `; SameSite=Lax`
   );
 }
-
 
 function getCookie(
   request,
@@ -2679,12 +3370,17 @@ function getCookie(
 
     const key =
       part
-        .slice(0, index)
+        .slice(
+          0,
+          index
+        )
         .trim();
 
     const value =
       part
-        .slice(index + 1)
+        .slice(
+          index + 1
+        )
         .trim();
 
     if (key === name) {
@@ -2700,7 +3396,6 @@ function getCookie(
 
   return "";
 }
-
 
 function corsHeaders(
   request
@@ -2720,19 +3415,24 @@ function corsHeaders(
     headers[
       "access-control-allow-credentials"
     ] = "true";
+
+    headers[
+      "vary"
+    ] = "Origin";
   }
 
   headers[
     "access-control-allow-methods"
-  ] = "GET,POST,OPTIONS";
+  ] =
+    "GET,POST,OPTIONS";
 
   headers[
     "access-control-allow-headers"
-  ] = "Content-Type";
+  ] =
+    "Content-Type";
 
   return headers;
 }
-
 
 function json(
   data,
@@ -2756,9 +3456,10 @@ function json(
     const [
       key,
       value,
-    ]
-    of Object.entries(
-      corsHeaders(request)
+    ] of Object.entries(
+      corsHeaders(
+        request
+      )
     )
   ) {
     headers.set(
