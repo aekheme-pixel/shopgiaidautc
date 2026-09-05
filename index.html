@@ -1,1266 +1,2506 @@
-// ============================================================
-// CUSTOM 151 - CLOUDFLARE WORKER
-// Auth + D1 + Tournaments + Rankings
-// Không cần npm package
-// ============================================================
+<!doctype html>
+<html lang="vi">
+<head>
 
-const SESSION_DAYS = 7;
-const PBKDF2_ITERATIONS = 100000;
+<meta charset="utf-8">
 
-// ------------------------------------------------------------
-// Response helpers
-// ------------------------------------------------------------
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1,viewport-fit=cover"
+>
 
-function json(data, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=UTF-8",
-      "cache-control": "no-store",
-      ...extraHeaders
+<title>CUSTOM 151 — Free Fire Tournament</title>
+
+<meta
+  name="theme-color"
+  content="#070708"
+>
+
+<style>
+
+*{
+  box-sizing:border-box;
+}
+
+html{
+  scroll-behavior:smooth;
+}
+
+body{
+  margin:0;
+  background:#070708;
+  color:#f4f4f5;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+}
+
+body.modal-open{
+  overflow:hidden;
+}
+
+a{
+  color:inherit;
+  text-decoration:none;
+}
+
+button,
+input,
+select,
+textarea{
+  font:inherit;
+}
+
+button{
+  cursor:pointer;
+}
+
+button:disabled{
+  cursor:not-allowed;
+  opacity:.6;
+}
+
+/* =========================================================
+   NAV
+========================================================= */
+
+.top{
+  position:sticky;
+  top:0;
+  z-index:50;
+
+  background:
+    rgba(8,8,9,.92);
+
+  border-bottom:
+    1px solid #252529;
+
+  backdrop-filter:
+    blur(14px);
+}
+
+.nav{
+  max-width:1180px;
+  margin:auto;
+
+  padding:
+    18px 22px;
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.brand{
+  font-weight:900;
+  letter-spacing:2px;
+  font-size:20px;
+}
+
+.brand b{
+  color:#ed1b2f;
+}
+
+.navlinks{
+  display:flex;
+  align-items:center;
+  gap:20px;
+  color:#aaa;
+}
+
+.navlinks a{
+  transition:.2s;
+}
+
+.navlinks a:hover{
+  color:white;
+}
+
+.btn{
+  border:0;
+  border-radius:10px;
+  padding:13px 20px;
+  font-weight:800;
+  transition:
+    transform .15s,
+    opacity .15s,
+    background .15s;
+}
+
+.btn:active{
+  transform:scale(.97);
+}
+
+.red{
+  background:#ed1b2f;
+  color:white;
+}
+
+.red:hover{
+  background:#ff2439;
+}
+
+.ghost{
+  background:#111114;
+  border:1px solid #2b2b30;
+  color:white;
+}
+
+.ghost:hover{
+  background:#18181c;
+}
+
+.mobilemenu{
+  display:none;
+}
+
+/* =========================================================
+   HERO
+========================================================= */
+
+.hero{
+  max-width:1180px;
+  margin:auto;
+
+  padding:
+    70px 22px
+    45px;
+
+  text-align:center;
+}
+
+.eyebrow{
+  display:inline-block;
+
+  border:
+    1px solid #624d12;
+
+  color:#ffc21a;
+
+  border-radius:8px;
+
+  padding:
+    7px 20px;
+
+  font-weight:800;
+  letter-spacing:2px;
+}
+
+.hero h1{
+  font-size:
+    clamp(52px,10vw,100px);
+
+  margin:
+    25px 0 0;
+
+  line-height:.9;
+
+  letter-spacing:-5px;
+}
+
+.hero h1 span{
+  color:#ed1b2f;
+}
+
+.hero h2{
+  font-size:28px;
+  margin:25px 0 10px;
+}
+
+.hero p{
+  font-size:20px;
+  color:#a8a8ad;
+  line-height:1.6;
+
+  max-width:780px;
+
+  margin:
+    0 auto 25px;
+}
+
+.actions{
+  display:flex;
+  justify-content:center;
+  gap:14px;
+  flex-wrap:wrap;
+}
+
+/* =========================================================
+   STATS
+========================================================= */
+
+.stats{
+  max-width:1120px;
+  margin:
+    0 auto 55px;
+
+  display:grid;
+  grid-template-columns:
+    repeat(4,1fr);
+
+  border:
+    1px solid #202126;
+
+  background:#111216;
+}
+
+.stat{
+  padding:24px;
+  text-align:center;
+
+  border-right:
+    1px solid #292a2f;
+}
+
+.stat:last-child{
+  border:0;
+}
+
+.stat strong{
+  display:block;
+
+  font-size:42px;
+
+  color:#ed1b2f;
+}
+
+.stat:nth-child(2) strong,
+.gold{
+  color:#ffbf18!important;
+}
+
+.stat small{
+  color:#999;
+  letter-spacing:1px;
+}
+
+/* =========================================================
+   SECTION
+========================================================= */
+
+.section{
+  max-width:1120px;
+  margin:auto;
+
+  padding:
+    40px 22px;
+}
+
+.section h2{
+  font-size:46px;
+  margin:0 0 8px;
+}
+
+.section h2 span{
+  color:#ed1b2f;
+}
+
+.muted{
+  color:#999;
+}
+
+/* =========================================================
+   CARDS
+========================================================= */
+
+.cards{
+  display:grid;
+  grid-template-columns:
+    repeat(3,1fr);
+
+  gap:16px;
+}
+
+.card{
+  background:#111216;
+  border:
+    1px solid #292a2f;
+
+  border-radius:14px;
+
+  padding:20px;
+}
+
+.card h3{
+  margin-top:0;
+}
+
+.price{
+  font-size:30px;
+  color:#ffbf18;
+  font-weight:900;
+}
+
+/* =========================================================
+   FORM
+========================================================= */
+
+.form{
+  width:100%;
+  max-width:760px;
+
+  margin:
+    30px auto;
+
+  background:#111216;
+
+  border:
+    1px solid #292a2f;
+
+  border-radius:24px;
+
+  padding:32px;
+}
+
+.form h2{
+  font-size:40px;
+  margin:
+    0 0 30px;
+}
+
+.form label{
+  display:block;
+
+  color:#aaa;
+
+  margin:
+    18px 0 8px;
+
+  font-size:18px;
+  font-weight:700;
+}
+
+.form input,
+.form textarea,
+.form select{
+  width:100%;
+
+  padding:
+    15px 16px;
+
+  border-radius:12px;
+
+  border:
+    1px solid #34353b;
+
+  background:#09090b;
+
+  color:#fff;
+
+  outline:none;
+
+  transition:
+    border .2s,
+    box-shadow .2s;
+}
+
+.form input:focus,
+.form textarea:focus,
+.form select:focus{
+  border-color:#ed1b2f;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(237,27,47,.12);
+}
+
+.password-wrap{
+  position:relative;
+}
+
+.password-wrap input{
+  padding-right:58px;
+}
+
+.password-eye{
+  position:absolute;
+
+  right:10px;
+  top:50%;
+
+  transform:
+    translateY(-50%);
+
+  width:42px;
+  height:42px;
+
+  border:0;
+
+  background:transparent;
+
+  color:#aaa;
+
+  font-size:21px;
+}
+
+.password-eye:hover{
+  color:white;
+}
+
+.row{
+  display:grid;
+
+  grid-template-columns:
+    1fr 1fr;
+
+  gap:12px;
+}
+
+.form-submit{
+  width:100%;
+
+  margin-top:25px;
+
+  padding:17px;
+
+  font-size:20px;
+}
+
+.auth-switch{
+  margin-top:25px;
+
+  color:#aaa;
+
+  font-size:18px;
+}
+
+.auth-switch a{
+  color:#ed1b2f;
+  font-weight:900;
+}
+
+.auth-switch a:hover{
+  color:#ff3347;
+}
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.tablewrap{
+  overflow:auto;
+}
+
+.table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+.table th,
+.table td{
+  padding:13px;
+
+  border-bottom:
+    1px solid #28292e;
+
+  text-align:left;
+
+  white-space:nowrap;
+}
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
+.footer{
+  padding:50px 22px;
+
+  text-align:center;
+
+  color:#666;
+
+  border-top:
+    1px solid #222;
+}
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+#modal{
+  position:fixed;
+  inset:0;
+
+  z-index:100;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  padding:20px;
+
+  background:
+    rgba(0,0,0,.78);
+
+  backdrop-filter:
+    blur(10px);
+
+  overflow:auto;
+}
+
+.modal-box{
+  position:relative;
+
+  width:100%;
+  max-width:760px;
+
+  max-height:
+    calc(100vh - 40px);
+
+  overflow:auto;
+
+  background:#111216;
+
+  border:
+    1px solid #303139;
+
+  border-radius:26px;
+
+  box-shadow:
+    0 30px 100px
+    rgba(0,0,0,.7);
+
+  padding:28px;
+}
+
+.modal-close{
+  position:absolute;
+
+  top:18px;
+  right:18px;
+
+  width:50px;
+  height:50px;
+
+  border-radius:14px;
+
+  background:#111114;
+
+  border:
+    1px solid #303139;
+
+  color:white;
+
+  font-size:25px;
+}
+
+.modal-close:hover{
+  background:#19191d;
+}
+
+.modal-box .form{
+  margin:0;
+  padding:0;
+  border:0;
+  background:transparent;
+}
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+#toastContainer{
+  position:fixed;
+
+  top:22px;
+  right:22px;
+
+  z-index:500;
+
+  width:
+    min(430px,calc(100vw - 30px));
+
+  display:flex;
+  flex-direction:column;
+
+  gap:12px;
+
+  pointer-events:none;
+}
+
+.toast{
+  pointer-events:auto;
+
+  display:flex;
+  align-items:flex-start;
+
+  gap:15px;
+
+  padding:18px;
+
+  border-radius:16px;
+
+  background:#15161a;
+
+  border:
+    1px solid #303139;
+
+  box-shadow:
+    0 18px 60px
+    rgba(0,0,0,.45);
+
+  animation:
+    toastIn .25s ease;
+}
+
+.toast.success{
+  border-color:#25c76f;
+}
+
+.toast.error{
+  border-color:#ed1b2f;
+}
+
+.toast-icon{
+  flex:none;
+
+  width:42px;
+  height:42px;
+
+  display:grid;
+  place-items:center;
+
+  border-radius:50%;
+
+  background:#24252a;
+
+  font-weight:900;
+  font-size:20px;
+}
+
+.toast.success .toast-icon{
+  background:
+    rgba(37,199,111,.18);
+
+  color:#42dc89;
+}
+
+.toast.error .toast-icon{
+  background:
+    rgba(237,27,47,.18);
+
+  color:#ff5364;
+}
+
+.toast-title{
+  font-weight:900;
+  font-size:17px;
+  margin-bottom:4px;
+}
+
+.toast-message{
+  color:#aaa;
+  line-height:1.45;
+  font-size:15px;
+}
+
+.toast-close{
+  margin-left:auto;
+
+  border:0;
+
+  background:transparent;
+
+  color:#777;
+
+  font-size:20px;
+}
+
+.toast-close:hover{
+  color:white;
+}
+
+@keyframes toastIn{
+  from{
+    opacity:0;
+    transform:
+      translateY(-10px)
+      scale(.98);
+  }
+
+  to{
+    opacity:1;
+    transform:
+      translateY(0)
+      scale(1);
+  }
+}
+
+.toast.out{
+  animation:
+    toastOut .2s ease forwards;
+}
+
+@keyframes toastOut{
+  to{
+    opacity:0;
+    transform:
+      translateY(-10px)
+      scale(.98);
+  }
+}
+
+/* =========================================================
+   ACCOUNT
+========================================================= */
+
+.account{
+  position:relative;
+}
+
+.account-button{
+  display:flex;
+  align-items:center;
+  gap:10px;
+
+  border:1px solid #303139;
+
+  background:#111114;
+
+  color:white;
+
+  padding:
+    7px 12px 7px 7px;
+
+  border-radius:12px;
+}
+
+.account-avatar{
+  width:38px;
+  height:38px;
+
+  display:grid;
+  place-items:center;
+
+  border-radius:50%;
+
+  background:
+    linear-gradient(
+      135deg,
+      #ed1b2f,
+      #7d0715
+    );
+
+  font-weight:900;
+}
+
+.account-name{
+  max-width:150px;
+
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.account-menu{
+  position:absolute;
+
+  right:0;
+  top:
+    calc(100% + 10px);
+
+  width:280px;
+
+  padding:12px;
+
+  background:#111216;
+
+  border:
+    1px solid #303139;
+
+  border-radius:16px;
+
+  box-shadow:
+    0 20px 70px
+    rgba(0,0,0,.55);
+}
+
+.account-info{
+  padding:13px;
+
+  border-radius:12px;
+
+  background:#0b0b0e;
+
+  margin-bottom:8px;
+}
+
+.account-email{
+  font-weight:800;
+
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.account-role{
+  margin-top:5px;
+
+  color:#ed1b2f;
+
+  font-size:13px;
+
+  font-weight:900;
+
+  letter-spacing:1px;
+}
+
+.account-menu button{
+  width:100%;
+  text-align:left;
+}
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loading{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+
+.spinner{
+  width:18px;
+  height:18px;
+
+  border:
+    2px solid
+    rgba(255,255,255,.35);
+
+  border-top-color:white;
+
+  border-radius:50%;
+
+  animation:
+    spin .7s linear infinite;
+}
+
+@keyframes spin{
+  to{
+    transform:rotate(360deg);
+  }
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media(max-width:760px){
+
+  .navlinks{
+    display:none;
+  }
+
+  .mobilemenu{
+    display:block;
+  }
+
+  .stats{
+    grid-template-columns:
+      1fr 1fr;
+
+    margin:
+      0 22px 35px;
+  }
+
+  .stat:nth-child(2){
+    border-right:0;
+  }
+
+  .stat:nth-child(3){
+    border-top:
+      1px solid #292a2f;
+  }
+
+  .stat:nth-child(4){
+    border-top:
+      1px solid #292a2f;
+
+    border-right:0;
+  }
+
+  .cards{
+    grid-template-columns:1fr;
+  }
+
+  .row{
+    grid-template-columns:1fr;
+  }
+
+  .hero{
+    padding-top:45px;
+  }
+
+  .hero h1{
+    letter-spacing:-3px;
+  }
+
+  .section h2{
+    font-size:36px;
+  }
+
+  .form{
+    padding:24px 20px;
+  }
+
+  .form h2{
+    font-size:32px;
+  }
+
+  .modal-box{
+    padding:22px;
+    border-radius:22px;
+  }
+
+  #toastContainer{
+    top:12px;
+    right:15px;
+    width:calc(100vw - 30px);
+  }
+
+  .account-name{
+    display:none;
+  }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<!-- ========================================================
+     NAV
+========================================================= -->
+
+<header class="top">
+
+<div class="nav">
+
+  <div class="brand">
+    CUSTOM <b>151</b>
+  </div>
+
+  <nav
+    class="navlinks"
+    id="desktopNav"
+  >
+
+    <a href="#home">
+      TRANG CHỦ
+    </a>
+
+    <a href="#tournaments">
+      GIẢI ĐẤU
+    </a>
+
+    <a href="#schedule">
+      LỊCH THI ĐẤU
+    </a>
+
+    <a href="#ranking">
+      BẢNG XẾP HẠNG
+    </a>
+
+    <div id="authNav">
+      <button
+        class="btn red"
+        onclick="openLogin()"
+      >
+        ĐĂNG NHẬP
+      </button>
+    </div>
+
+  </nav>
+
+  <button
+    class="btn ghost mobilemenu"
+    onclick="openLogin()"
+  >
+    ☰
+  </button>
+
+</div>
+
+</header>
+
+
+<!-- ========================================================
+     MAIN
+========================================================= -->
+
+<main id="home">
+
+<section class="hero">
+
+  <div class="eyebrow">
+    CUSTOM 151 • COMMUNITY TOURNAMENT
+  </div>
+
+  <h1>
+    CUSTOM <span>151</span>
+  </h1>
+
+  <h2>
+    NƠI ĐỘI TUYỂN KHẲNG ĐỊNH ĐẲNG CẤP
+  </h2>
+
+  <p>
+    Đăng ký đội tuyển, chọn khung giờ và sẵn sàng bước vào
+    những trận đấu sinh tồn đầy cạnh tranh.
+  </p>
+
+  <div class="actions">
+
+    <button
+      class="btn red"
+      onclick="openRegister()"
+    >
+      → ĐĂNG KÝ ĐỘI
+    </button>
+
+    <a
+      class="btn ghost"
+      href="#schedule"
+    >
+      XEM LỊCH ĐẤU
+    </a>
+
+  </div>
+
+</section>
+
+
+<!-- ========================================================
+     STATS
+========================================================= -->
+
+<section class="stats">
+
+  <div class="stat">
+    <strong>04</strong>
+    <small>KHUNG GIỜ</small>
+  </div>
+
+  <div class="stat">
+    <strong>02</strong>
+    <small>BẢNG ĐẤU</small>
+  </div>
+
+  <div class="stat">
+    <strong class="gold">LIVE</strong>
+    <small>CẬP NHẬT ĐỘI</small>
+  </div>
+
+  <div class="stat">
+    <strong class="gold">24/7</strong>
+    <small>ĐĂNG KÝ ONLINE</small>
+  </div>
+
+</section>
+
+
+<!-- ========================================================
+     TOURNAMENTS
+========================================================= -->
+
+<section
+  class="section"
+  id="tournaments"
+>
+
+  <h2>
+    GIẢI <span>ĐẤU</span>
+  </h2>
+
+  <p class="muted">
+    Giải đang mở đăng ký
+  </p>
+
+  <div
+    id="tournamentCards"
+    class="cards"
+  ></div>
+
+</section>
+
+
+<!-- ========================================================
+     SCHEDULE
+========================================================= -->
+
+<section
+  class="section"
+  id="schedule"
+>
+
+  <h2>
+    LỊCH THI <span>ĐẤU</span>
+  </h2>
+
+  <p class="muted">
+    Chọn khung giờ • Xem đội tuyển • Sẵn sàng thi đấu
+  </p>
+
+  <div class="tabs">
+
+    <button class="btn red tab">
+      13:00
+    </button>
+
+    <button class="btn ghost tab">
+      15:00
+    </button>
+
+    <button class="btn ghost tab">
+      20:00
+    </button>
+
+    <button class="btn ghost tab">
+      22:00
+    </button>
+
+  </div>
+
+</section>
+
+
+<!-- ========================================================
+     RANKING
+========================================================= -->
+
+<section
+  class="section"
+  id="ranking"
+>
+
+  <h2>
+    BẢNG XẾP <span>HẠNG</span>
+  </h2>
+
+  <div class="card">
+
+    <div class="tablewrap">
+
+      <table class="table">
+
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Đội</th>
+            <th>Hạ gục</th>
+            <th>Điểm</th>
+          </tr>
+        </thead>
+
+        <tbody id="rankBody">
+
+          <tr>
+            <td
+              colspan="4"
+              class="muted"
+            >
+              Đang tải...
+            </td>
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+</section>
+
+</main>
+
+
+<!-- ========================================================
+     FOOTER
+========================================================= -->
+
+<footer class="footer">
+  CUSTOM 151 • FREE FIRE TOURNAMENT SYSTEM • 2026
+</footer>
+
+
+<!-- ========================================================
+     MODAL
+========================================================= -->
+
+<div
+  id="modal"
+  class="hide"
+></div>
+
+
+<!-- ========================================================
+     TOAST
+========================================================= -->
+
+<div id="toastContainer"></div>
+
+
+<script>
+
+/* =========================================================
+   BASIC
+========================================================= */
+
+const $ = selector =>
+  document.querySelector(selector);
+
+let currentUser = null;
+
+let selectedTournamentId = null;
+
+
+/* =========================================================
+   API
+========================================================= */
+
+async function api(url, options = {}){
+
+  const config = {
+    credentials:"same-origin",
+
+    ...options,
+
+    headers:{
+      "content-type":
+        "application/json",
+
+      ...(options.headers || {})
     }
-  });
-}
-
-function ok(data = {}) {
-  return json({
-    success: true,
-    ...data
-  });
-}
-
-function fail(message, status = 400, code = "BAD_REQUEST") {
-  return json(
-    {
-      success: false,
-      error: message,
-      code
-    },
-    status
-  );
-}
-
-// ------------------------------------------------------------
-// Request helpers
-// ------------------------------------------------------------
-
-async function bodyJSON(request) {
-  try {
-    return await request.json();
-  } catch {
-    return {};
-  }
-}
-
-function cleanEmail(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function validEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function validPassword(password) {
-  return typeof password === "string" && password.length >= 8;
-}
-
-// ------------------------------------------------------------
-// Random / encoding helpers
-// ------------------------------------------------------------
-
-function bytesToBase64(bytes) {
-  let binary = "";
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return btoa(binary);
-}
-
-function base64ToBytes(value) {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes;
-}
-
-function randomToken(bytes = 32) {
-  const data = new Uint8Array(bytes);
-  crypto.getRandomValues(data);
-  return bytesToBase64(data)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-}
-
-// ------------------------------------------------------------
-// Password hashing
-// PBKDF2 + SHA-256
-// ------------------------------------------------------------
-
-async function derivePassword(password, saltBytes) {
-  const encoder = new TextEncoder();
-
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    {
-      name: "PBKDF2"
-    },
-    false,
-    ["deriveBits"]
-  );
-
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: saltBytes,
-      iterations: PBKDF2_ITERATIONS,
-      hash: "SHA-256"
-    },
-    keyMaterial,
-    256
-  );
-
-  return new Uint8Array(bits);
-}
-
-async function hashPassword(password) {
-  const salt = new Uint8Array(16);
-  crypto.getRandomValues(salt);
-
-  const hash = await derivePassword(password, salt);
-
-  return {
-    salt: bytesToBase64(salt),
-    hash: bytesToBase64(hash)
   };
-}
 
-function timingSafeEqual(a, b) {
-  if (a.length !== b.length) return false;
+  const response =
+    await fetch(
+      url,
+      config
+    );
 
-  let result = 0;
+  const data =
+    await response
+      .json()
+      .catch(() => ({
+        success:false,
+        error:"Máy chủ trả về dữ liệu không hợp lệ."
+      }));
 
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  if(!response.ok){
+
+    const error =
+      new Error(
+        data.error ||
+        data.message ||
+        "Có lỗi xảy ra."
+      );
+
+    error.code =
+      data.code;
+
+    error.status =
+      response.status;
+
+    throw error;
   }
 
-  return result === 0;
+  return data;
 }
 
-async function verifyPassword(password, storedHash, storedSalt) {
-  try {
-    // Trường hợp DB có password_salt
-    if (storedSalt) {
-      const salt = base64ToBytes(storedSalt);
-      const hash = await derivePassword(password, salt);
 
-      return timingSafeEqual(
-        bytesToBase64(hash),
-        String(storedHash)
-      );
-    }
+/* =========================================================
+   ESCAPE HTML
+========================================================= */
 
-    // Trường hợp password_hash có dạng:
-    // v1$SALT$HASH
-    const value = String(storedHash || "");
+function esc(value){
 
-    if (value.startsWith("v1$")) {
-      const parts = value.split("$");
-
-      if (parts.length !== 3) return false;
-
-      const salt = base64ToBytes(parts[1]);
-      const expected = parts[2];
-
-      const hash = await derivePassword(password, salt);
-
-      return timingSafeEqual(
-        bytesToBase64(hash),
-        expected
-      );
-    }
-
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-// ------------------------------------------------------------
-// users schema compatibility
-// ------------------------------------------------------------
-
-async function getUserColumns(env) {
-  const result = await env.DB
-    .prepare("PRAGMA table_info(users)")
-    .all();
-
-  return new Set(
-    (result.results || []).map(row => row.name)
+  return String(
+    value ?? ""
+  ).replace(
+    /[&<>"']/g,
+    char => ({
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      '"':"&quot;",
+      "'":"&#39;"
+    }[char])
   );
+
 }
 
-// ------------------------------------------------------------
-// Session
-// ------------------------------------------------------------
 
-function getCookie(request, name) {
-  const header = request.headers.get("cookie") || "";
+/* =========================================================
+   TOAST
+========================================================= */
 
-  const cookies = header.split(";");
+function showToast(
+  type,
+  title,
+  message
+){
 
-  for (const cookie of cookies) {
-    const index = cookie.indexOf("=");
+  const container =
+    $("#toastContainer");
 
-    if (index === -1) continue;
+  const toast =
+    document.createElement("div");
 
-    const key = cookie.slice(0, index).trim();
-    const value = cookie.slice(index + 1).trim();
+  toast.className =
+    `toast ${type}`;
 
-    if (key === name) {
-      return decodeURIComponent(value);
-    }
-  }
+  const icon =
+    type === "success"
+      ? "✓"
+      : "!";
 
-  return null;
-}
+  toast.innerHTML = `
 
-function sessionCookie(token, maxAge = SESSION_DAYS * 86400) {
-  return [
-    `session=${encodeURIComponent(token)}`,
-    `Max-Age=${maxAge}`,
-    "Path=/",
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax"
-  ].join("; ");
-}
+    <div class="toast-icon">
+      ${icon}
+    </div>
 
-async function getCurrentUser(request, env) {
-  const token = getCookie(request, "session");
+    <div style="flex:1">
 
-  if (!token) return null;
+      <div class="toast-title">
+        ${esc(title)}
+      </div>
 
-  const now = Math.floor(Date.now() / 1000);
+      <div class="toast-message">
+        ${esc(message)}
+      </div>
 
-  const row = await env.DB
-    .prepare(`
-      SELECT
-        users.id,
-        users.email,
-        users.role,
-        users.created_at
-      FROM sessions
-      INNER JOIN users
-        ON users.id = sessions.user_id
-      WHERE sessions.token = ?
-        AND sessions.expires_at > ?
-      LIMIT 1
-    `)
-    .bind(token, now)
-    .first();
+    </div>
 
-  return row || null;
-}
+    <button
+      class="toast-close"
+      aria-label="Đóng"
+    >
+      ×
+    </button>
 
-async function requireUser(request, env) {
-  const user = await getCurrentUser(request, env);
+  `;
 
-  if (!user) {
-    return {
-      error: fail(
-        "Bạn chưa đăng nhập.",
-        401,
-        "UNAUTHORIZED"
-      )
+  const close =
+    () => {
+
+      toast.classList.add("out");
+
+      setTimeout(
+        () => toast.remove(),
+        200
+      );
+
     };
+
+  toast
+    .querySelector(".toast-close")
+    .onclick = close;
+
+  container.appendChild(toast);
+
+  setTimeout(
+    close,
+    5000
+  );
+}
+
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+function modal(content){
+
+  const modalEl =
+    $("#modal");
+
+  modalEl.className = "";
+
+  modalEl.innerHTML = `
+
+    <div class="modal-box">
+
+      <button
+        class="modal-close"
+        onclick="closeModal()"
+        aria-label="Đóng"
+      >
+        ×
+      </button>
+
+      ${content}
+
+    </div>
+
+  `;
+
+  document.body.classList.add(
+    "modal-open"
+  );
+
+}
+
+
+function closeModal(){
+
+  const modalEl =
+    $("#modal");
+
+  modalEl.className =
+    "hide";
+
+  modalEl.innerHTML = "";
+
+  document.body.classList.remove(
+    "modal-open"
+  );
+}
+
+
+/* =========================================================
+   PASSWORD EYE
+========================================================= */
+
+function togglePassword(id, button){
+
+  const input =
+    document.getElementById(id);
+
+  if(!input){
+    return;
   }
 
-  return {
-    user
-  };
-}
+  if(input.type === "password"){
 
-async function createSession(env, userId) {
-  const token = randomToken(32);
-  const expiresAt =
-    Math.floor(Date.now() / 1000) +
-    SESSION_DAYS * 86400;
+    input.type =
+      "text";
 
-  await env.DB
-    .prepare(`
-      INSERT INTO sessions (
-        token,
-        user_id,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `)
-    .bind(
-      token,
-      userId,
-      expiresAt
-    )
-    .run();
+    button.textContent =
+      "🙈";
 
-  return token;
-}
+  }else{
 
-// ------------------------------------------------------------
-// Audit
-// ------------------------------------------------------------
+    input.type =
+      "password";
 
-async function audit(
-  env,
-  userId,
-  action,
-  target = null,
-  details = null
-) {
-  try {
-    await env.DB
-      .prepare(`
-        INSERT INTO audit_logs (
-          user_id,
-          action,
-          target,
-          details
-        )
-        VALUES (?, ?, ?, ?)
-      `)
-      .bind(
-        userId || null,
-        action,
-        target,
-        details
-          ? JSON.stringify(details)
-          : null
-      )
-      .run();
-  } catch {
-    // Audit không được làm hỏng request chính
+    button.textContent =
+      "👁";
+
   }
+
 }
 
-// ============================================================
-// API ROUTER
-// ============================================================
 
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const method = request.method;
-
-    try {
-      // ======================================================
-      // HEALTH
-      // ======================================================
-
-      if (
-        url.pathname === "/api/health" &&
-        method === "GET"
-      ) {
-        const result = await env.DB
-          .prepare("SELECT 1 AS ok")
-          .first();
-
-        return ok({
-          worker: "online",
-          database:
-            result?.ok === 1
-              ? "connected"
-              : "error",
-          site: env.SITE_NAME || "CUSTOM 151"
-        });
-      }
-
-      // ======================================================
-      // TABLES
-      // ======================================================
-
-      if (
-        url.pathname === "/api/tables" &&
-        method === "GET"
-      ) {
-        const result = await env.DB
-          .prepare(`
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table'
-              AND name NOT LIKE 'sqlite_%'
-            ORDER BY name
-          `)
-          .all();
-
-        return ok({
-          tables: result.results || []
-        });
-      }
-
-      // ======================================================
-      // TABLE
-      // ======================================================
-
-      if (
-        url.pathname === "/api/table" &&
-        method === "GET"
-      ) {
-        const table =
-          url.searchParams.get("name");
-
-        if (!table) {
-          return fail(
-            "Thiếu tên bảng.",
-            400,
-            "MISSING_TABLE"
-          );
-        }
-
-        if (!/^[A-Za-z0-9_]+$/.test(table)) {
-          return fail(
-            "Tên bảng không hợp lệ.",
-            400,
-            "INVALID_TABLE"
-          );
-        }
-
-        const result = await env.DB
-          .prepare(
-            `SELECT * FROM "${table}" LIMIT 100`
-          )
-          .all();
-
-        return ok({
-          table,
-          rows: result.results || []
-        });
-      }
-
-      // ======================================================
-      // AUTH - REGISTER
-      // ======================================================
-
-      if (
-        url.pathname === "/api/auth/register" &&
-        method === "POST"
-      ) {
-        const data = await bodyJSON(request);
-
-        const email = cleanEmail(data.email);
-        const password = data.password;
-
-        if (!validEmail(email)) {
-          return fail(
-            "Email không hợp lệ.",
-            400,
-            "INVALID_EMAIL"
-          );
-        }
-
-        if (!validPassword(password)) {
-          return fail(
-            "Mật khẩu phải có ít nhất 8 ký tự.",
-            400,
-            "WEAK_PASSWORD"
-          );
-        }
-
-        const exists = await env.DB
-          .prepare(`
-            SELECT id
-            FROM users
-            WHERE email = ?
-            LIMIT 1
-          `)
-          .bind(email)
-          .first();
-
-        if (exists) {
-          return fail(
-            "Email này đã được đăng ký.",
-            409,
-            "EMAIL_EXISTS"
-          );
-        }
-
-        const columns =
-          await getUserColumns(env);
-
-        const passwordData =
-          await hashPassword(password);
-
-        let passwordHash =
-          passwordData.hash;
-
-        let passwordSalt =
-          passwordData.salt;
-
-        // ----------------------------------------------------
-        // XỬ LÝ password_salt:
-        //
-        // Nếu DB có password_salt:
-        //   password_hash = hash
-        //   password_salt = salt
-        //
-        // Nếu DB KHÔNG có:
-        //   password_hash = v1$salt$hash
-        // ----------------------------------------------------
-
-        if (!columns.has("password_salt")) {
-          passwordHash =
-            `v1$${passwordSalt}$${passwordHash}`;
-        }
-
-        let query;
-        let bindings;
-
-        if (columns.has("password_salt")) {
-          query = `
-            INSERT INTO users (
-              email,
-              password_hash,
-              password_salt,
-              role
-            )
-            VALUES (?, ?, ?, 'USER')
-          `;
-
-          bindings = [
-            email,
-            passwordHash,
-            passwordSalt
-          ];
-        } else {
-          query = `
-            INSERT INTO users (
-              email,
-              password_hash,
-              role
-            )
-            VALUES (?, ?, 'USER')
-          `;
-
-          bindings = [
-            email,
-            passwordHash
-          ];
-        }
-
-        const result = await env.DB
-          .prepare(query)
-          .bind(...bindings)
-          .run();
-
-        const userId =
-          result.meta?.last_row_id;
-
-        await audit(
-          env,
-          userId,
-          "REGISTER",
-          `user:${userId}`
-        );
-
-        return ok({
-          message:
-            "Tạo tài khoản thành công!",
-          user: {
-            id: userId,
-            email,
-            role: "USER"
-          }
-        });
-      }
-
-      // ======================================================
-      // AUTH - LOGIN
-      // ======================================================
-
-      if (
-        url.pathname === "/api/auth/login" &&
-        method === "POST"
-      ) {
-        const data = await bodyJSON(request);
-
-        const email = cleanEmail(data.email);
-        const password = data.password;
-
-        if (!validEmail(email)) {
-          return fail(
-            "Email không hợp lệ.",
-            400,
-            "INVALID_EMAIL"
-          );
-        }
-
-        if (!password) {
-          return fail(
-            "Vui lòng nhập mật khẩu.",
-            400,
-            "MISSING_PASSWORD"
-          );
-        }
-
-        const columns =
-          await getUserColumns(env);
-
-        let selectSalt = "";
-
-        if (columns.has("password_salt")) {
-          selectSalt =
-            ", password_salt";
-        }
-
-        const user = await env.DB
-          .prepare(`
-            SELECT
-              id,
-              email,
-              password_hash,
-              role,
-              created_at
-              ${selectSalt}
-            FROM users
-            WHERE email = ?
-            LIMIT 1
-          `)
-          .bind(email)
-          .first();
-
-        if (!user) {
-          return fail(
-            "Email hoặc mật khẩu không đúng.",
-            401,
-            "INVALID_CREDENTIALS"
-          );
-        }
-
-        const passwordOK =
-          await verifyPassword(
-            password,
-            user.password_hash,
-            user.password_salt
-          );
-
-        if (!passwordOK) {
-          await audit(
-            env,
-            user.id,
-            "LOGIN_FAILED",
-            `user:${user.id}`
-          );
-
-          return fail(
-            "Email hoặc mật khẩu không đúng.",
-            401,
-            "INVALID_CREDENTIALS"
-          );
-        }
-
-        const token =
-          await createSession(
-            env,
-            user.id
-          );
-
-        await audit(
-          env,
-          user.id,
-          "LOGIN",
-          `user:${user.id}`
-        );
-
-        return ok(
-          {
-            message:
-              "Đăng nhập thành công!",
-            user: {
-              id: user.id,
-              email: user.email,
-              role: user.role,
-              created_at:
-                user.created_at
-            }
-          },
-          200,
-          {
-            "set-cookie":
-              sessionCookie(token)
-          }
-        );
-      }
-
-      // ======================================================
-      // AUTH - ME
-      // ======================================================
-
-      if (
-        url.pathname === "/api/auth/me" &&
-        method === "GET"
-      ) {
-        const user =
-          await getCurrentUser(
-            request,
-            env
-          );
-
-        return ok({
-          authenticated: !!user,
-          user: user || null
-        });
-      }
-
-      // ======================================================
-      // AUTH - LOGOUT
-      // ======================================================
-
-      if (
-        url.pathname === "/api/auth/logout" &&
-        method === "POST"
-      ) {
-        const token =
-          getCookie(request, "session");
-
-        if (token) {
-          await env.DB
-            .prepare(`
-              DELETE FROM sessions
-              WHERE token = ?
-            `)
-            .bind(token)
-            .run();
-        }
-
-        return ok(
-          {
-            message:
-              "Đã đăng xuất."
-          },
-          200,
-          {
-            "set-cookie":
-              sessionCookie("", 0)
-          }
-        );
-      }
-
-      // ======================================================
-      // TOURNAMENTS - PUBLIC
-      // ======================================================
-
-      if (
-        url.pathname === "/api/tournaments" &&
-        method === "GET"
-      ) {
-        const result = await env.DB
-          .prepare(`
-            SELECT
-              id,
-              name,
-              fee,
-              max_teams,
-              status,
-              description,
-              created_at
-            FROM tournaments
-            WHERE status = 'OPEN'
-            ORDER BY id DESC
-          `)
-          .all();
-
-        return ok({
-          tournaments:
-            result.results || []
-        });
-      }
-
-      // ======================================================
-      // TOURNAMENT DETAIL
-      // ======================================================
-
-      if (
-        url.pathname === "/api/tournament" &&
-        method === "GET"
-      ) {
-        const id =
-          Number(
-            url.searchParams.get("id")
-          );
-
-        if (!Number.isInteger(id)) {
-          return fail(
-            "ID giải không hợp lệ.",
-            400,
-            "INVALID_ID"
-          );
-        }
-
-        const tournament =
-          await env.DB
-            .prepare(`
-              SELECT *
-              FROM tournaments
-              WHERE id = ?
-              LIMIT 1
-            `)
-            .bind(id)
-            .first();
-
-        if (!tournament) {
-          return fail(
-            "Không tìm thấy giải đấu.",
-            404,
-            "NOT_FOUND"
-          );
-        }
-
-        const slots =
-          await env.DB
-            .prepare(`
-              SELECT
-                s.*,
-                COUNT(r.id) AS registered
-              FROM slots s
-              LEFT JOIN registrations r
-                ON r.slot_id = s.id
-                AND r.status != 'CANCELLED'
-              WHERE s.tournament_id = ?
-              GROUP BY s.id
-              ORDER BY s.slot_time ASC
-            `)
-            .bind(id)
-            .all();
-
-        return ok({
-          tournament,
-          slots:
-            slots.results || []
-        });
-      }
-
-      // ======================================================
-      // RANKING
-      // ======================================================
-
-      if (
-        url.pathname === "/api/ranking" &&
-        method === "GET"
-      ) {
-        const tournamentId =
-          Number(
-            url.searchParams.get(
-              "tournament_id"
-            )
-          );
-
-        let query = `
-          SELECT
-            t.id,
-            t.name,
-            COALESCE(SUM(r.kills), 0) AS kills,
-            COALESCE(SUM(r.points), 0) AS points
-          FROM teams t
-          LEFT JOIN results r
-            ON r.team_id = t.id
-        `;
-
-        const bindings = [];
-
-        if (
-          Number.isInteger(tournamentId) &&
-          tournamentId > 0
-        ) {
-          query += `
-            WHERE r.match_id IN (
-              SELECT id
-              FROM matches
-              WHERE tournament_id = ?
-            )
-          `;
-
-          bindings.push(tournamentId);
-        }
-
-        query += `
-          GROUP BY t.id
-          ORDER BY points DESC, kills DESC
-          LIMIT 100
-        `;
-
-        const result = await env.DB
-          .prepare(query)
-          .bind(...bindings)
-          .all();
-
-        return ok({
-          ranking:
-            result.results || []
-        });
-      }
-
-      // ======================================================
-      // MY TEAMS
-      // ======================================================
-
-      if (
-        url.pathname === "/api/my-teams" &&
-        method === "GET"
-      ) {
-        const auth =
-          await requireUser(
-            request,
-            env
-          );
-
-        if (auth.error) {
-          return auth.error;
-        }
-
-        const result = await env.DB
-          .prepare(`
-            SELECT
-              id,
-              name,
-              tag,
-              logo_url,
-              status,
-              created_at
-            FROM teams
-            WHERE owner_id = ?
-            ORDER BY id DESC
-          `)
-          .bind(auth.user.id)
-          .all();
-
-        return ok({
-          teams:
-            result.results || []
-        });
-      }
-
-      // ======================================================
-      // CREATE TEAM
-      // ======================================================
-
-      if (
-        url.pathname === "/api/teams" &&
-        method === "POST"
-      ) {
-        const auth =
-          await requireUser(
-            request,
-            env
-          );
-
-        if (auth.error) {
-          return auth.error;
-        }
-
-        const data =
-          await bodyJSON(request);
-
-        const name =
-          String(data.name || "")
-            .trim();
-
-        const tag =
-          String(data.tag || "")
-            .trim();
-
-        if (name.length < 2) {
-          return fail(
-            "Tên đội quá ngắn.",
-            400,
-            "INVALID_TEAM"
-          );
-        }
-
-        if (name.length > 80) {
-          return fail(
-            "Tên đội quá dài.",
-            400,
-            "INVALID_TEAM"
-          );
-        }
-
-        const result = await env.DB
-          .prepare(`
-            INSERT INTO teams (
-              owner_id,
-              name,
-              tag,
-              status
-            )
-            VALUES (?, ?, ?, 'PENDING')
-          `)
-          .bind(
-            auth.user.id,
-            name,
-            tag || null
-          )
-          .run();
-
-        const teamId =
-          result.meta?.last_row_id;
-
-        await audit(
-          env,
-          auth.user.id,
-          "CREATE_TEAM",
-          `team:${teamId}`
-        );
-
-        return ok({
-          message:
-            "Tạo đội thành công!",
-          team: {
-            id: teamId,
-            name,
-            tag: tag || null,
-            status: "PENDING"
-          }
-        });
-      }
-
-      // ======================================================
-      // REGISTER TOURNAMENT
-      // ======================================================
-
-      if (
-        url.pathname === "/api/registrations" &&
-        method === "POST"
-      ) {
-        const auth =
-          await requireUser(
-            request,
-            env
-          );
-
-        if (auth.error) {
-          return auth.error;
-        }
-
-        const data =
-          await bodyJSON(request);
-
-        const teamId =
-          Number(data.team_id);
-
-        const tournamentId =
-          Number(data.tournament_id);
-
-        const slotId =
-          data.slot_id
-            ? Number(data.slot_id)
-            : null;
-
-        if (
-          !Number.isInteger(teamId) ||
-          !Number.isInteger(tournamentId)
-        ) {
-          return fail(
-            "Thông tin đăng ký không hợp lệ.",
-            400,
-            "INVALID_REGISTRATION"
-          );
-        }
-
-        const team =
-          await env.DB
-            .prepare(`
-              SELECT *
-              FROM teams
-              WHERE id = ?
-                AND owner_id = ?
-              LIMIT 1
-            `)
-            .bind(
-              teamId,
-              auth.user.id
-            )
-            .first();
-
-        if (!team) {
-          return fail(
-            "Đội không tồn tại hoặc bạn không có quyền.",
-            403,
-            "TEAM_FORBIDDEN"
-          );
-        }
-
-        const tournament =
-          await env.DB
-            .prepare(`
-              SELECT *
-              FROM tournaments
-              WHERE id = ?
-                AND status = 'OPEN'
-              LIMIT 1
-            `)
-            .bind(tournamentId)
-            .first();
-
-        if (!tournament) {
-          return fail(
-            "Giải đấu không tồn tại hoặc đã đóng đăng ký.",
-            404,
-            "TOURNAMENT_CLOSED"
-          );
-        }
-
-        if (slotId) {
-          const slot =
-            await env.DB
-              .prepare(`
-                SELECT
-                  s.*,
-                  COUNT(r.id) AS registered
-                FROM slots s
-                LEFT JOIN registrations r
-                  ON r.slot_id = s.id
-                  AND r.status != 'CANCELLED'
-                WHERE s.id = ?
-                  AND s.tournament_id = ?
-                GROUP BY s.id
-              `)
-              .bind(
-                slotId,
-                tournamentId
+/* =========================================================
+   LOGIN FORM
+========================================================= */
+
+function openLogin(){
+
+  modal(`
+
+    <div class="form">
+
+      <h2>
+        ĐĂNG NHẬP
+      </h2>
+
+      <form
+        id="loginForm"
+        onsubmit="submitLogin(event)"
+      >
+
+        <label>
+          Email
+        </label>
+
+        <input
+          id="loginEmail"
+          type="email"
+          autocomplete="email"
+          placeholder="you@example.com"
+          required
+        >
+
+        <label>
+          Mật khẩu
+        </label>
+
+        <div class="password-wrap">
+
+          <input
+            id="loginPassword"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Nhập mật khẩu"
+            minlength="8"
+            required
+          >
+
+          <button
+            type="button"
+            class="password-eye"
+            onclick="
+              togglePassword(
+                'loginPassword',
+                this
               )
-              .first();
+            "
+          >
+            👁
+          </button>
 
-          if (!slot) {
-            return fail(
-              "Khung giờ không tồn tại.",
-              404,
-              "SLOT_NOT_FOUND"
-            );
-          }
+        </div>
 
-          if (
-            Number(slot.registered) >=
-            Number(slot.capacity)
-          ) {
-            return fail(
-              "Khung giờ này đã đủ đội.",
-              409,
-              "SLOT_FULL"
-            );
-          }
-        }
+        <button
+          id="loginSubmit"
+          class="btn red form-submit"
+          type="submit"
+        >
+          ĐĂNG NHẬP
+        </button>
 
-        const duplicate =
-          await env.DB
-            .prepare(`
-              SELECT id
-              FROM registrations
-              WHERE team_id = ?
-                AND tournament_id = ?
-                AND status != 'CANCELLED'
-              LIMIT 1
-            `)
-            .bind(
-              teamId,
-              tournamentId
-            )
-            .first();
+      </form>
 
-        if (duplicate) {
-          return fail(
-            "Đội này đã đăng ký giải.",
-            409,
-            "ALREADY_REGISTERED"
-          );
-        }
+      <div class="auth-switch">
 
-        const orderCode =
-          `C151-${Date.now()}-${randomToken(4).toUpperCase()}`;
+        Chưa có tài khoản?
 
-        const result =
-          await env.DB
-            .prepare(`
-              INSERT INTO registrations (
-                team_id,
-                tournament_id,
-                slot_id,
-                order_code,
-                amount,
-                status
+        <a
+          href="#"
+          onclick="
+            openSignup();
+            return false;
+          "
+        >
+          Đăng ký
+        </a>
+
+      </div>
+
+    </div>
+
+  `);
+
+  setTimeout(
+    () =>
+      $("#loginEmail")?.focus(),
+    50
+  );
+}
+
+
+/* =========================================================
+   REGISTER FORM
+========================================================= */
+
+function openSignup(){
+
+  modal(`
+
+    <div class="form">
+
+      <h2>
+        TẠO TÀI KHOẢN
+      </h2>
+
+      <form
+        id="signupForm"
+        onsubmit="submitSignup(event)"
+      >
+
+        <label>
+          Email
+        </label>
+
+        <input
+          id="signupEmail"
+          type="email"
+          autocomplete="email"
+          placeholder="you@example.com"
+          required
+        >
+
+        <label>
+          Mật khẩu
+        </label>
+
+        <div class="password-wrap">
+
+          <input
+            id="signupPassword"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Ít nhất 8 ký tự"
+            minlength="8"
+            required
+          >
+
+          <button
+            type="button"
+            class="password-eye"
+            onclick="
+              togglePassword(
+                'signupPassword',
+                this
               )
-              VALUES (?, ?, ?, ?, ?, 'AWAITING_PAYMENT')
-            `)
-            .bind(
-              teamId,
-              tournamentId,
-              slotId,
-              orderCode,
-              Number(tournament.fee) || 0
-            )
-            .run();
+            "
+          >
+            👁
+          </button>
 
-        const registrationId =
-          result.meta?.last_row_id;
+        </div>
 
-        await audit(
-          env,
-          auth.user.id,
-          "REGISTER_TOURNAMENT",
-          `registration:${registrationId}`,
-          {
-            team_id: teamId,
-            tournament_id:
-              tournamentId,
-            slot_id: slotId
-          }
-        );
+        <label>
+          Nhập lại mật khẩu
+        </label>
 
-        return ok({
-          message:
-            "Đăng ký giải thành công!",
-          registration: {
-            id: registrationId,
-            order_code: orderCode,
-            amount:
-              Number(tournament.fee) || 0,
-            status:
-              "AWAITING_PAYMENT"
-          }
-        });
+        <div class="password-wrap">
+
+          <input
+            id="signupPasswordConfirm"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Nhập lại mật khẩu"
+            minlength="8"
+            required
+          >
+
+          <button
+            type="button"
+            class="password-eye"
+            onclick="
+              togglePassword(
+                'signupPasswordConfirm',
+                this
+              )
+            "
+          >
+            👁
+          </button>
+
+        </div>
+
+        <button
+          id="signupSubmit"
+          class="btn red form-submit"
+          type="submit"
+        >
+          TẠO TÀI KHOẢN
+        </button>
+
+      </form>
+
+      <div class="auth-switch">
+
+        Đã có tài khoản?
+
+        <a
+          href="#"
+          onclick="
+            openLogin();
+            return false;
+          "
+        >
+          Đăng nhập
+        </a>
+
+      </div>
+
+    </div>
+
+  `);
+
+  setTimeout(
+    () =>
+      $("#signupEmail")?.focus(),
+    50
+  );
+}
+
+
+/* =========================================================
+   REGISTER SUBMIT
+========================================================= */
+
+async function submitSignup(event){
+
+  event.preventDefault();
+
+  const button =
+    $("#signupSubmit");
+
+  const email =
+    $("#signupEmail")
+      .value
+      .trim()
+      .toLowerCase();
+
+  const password =
+    $("#signupPassword")
+      .value;
+
+  const confirm =
+    $("#signupPasswordConfirm")
+      .value;
+
+  if(password.length < 8){
+
+    showToast(
+      "error",
+      "Tạo tài khoản thất bại",
+      "Mật khẩu phải có ít nhất 8 ký tự."
+    );
+
+    return;
+  }
+
+  if(password !== confirm){
+
+    showToast(
+      "error",
+      "Tạo tài khoản thất bại",
+      "Mật khẩu nhập lại không khớp."
+    );
+
+    return;
+  }
+
+  button.disabled = true;
+
+  button.innerHTML = `
+    <span class="loading">
+      <span class="spinner"></span>
+      ĐANG TẠO TÀI KHOẢN...
+    </span>
+  `;
+
+  try{
+
+    await api(
+      "/api/auth/register",
+      {
+        method:"POST",
+
+        body:JSON.stringify({
+          email,
+          password
+        })
       }
+    );
 
-      // ======================================================
-      // WEBSITE
-      // ======================================================
+    /*
+      REGISTER THÀNH CÔNG
 
-      if (env.ASSETS) {
-        return env.ASSETS.fetch(request);
-      }
+      Không tự login.
 
-      return new Response(
-        "CUSTOM 151 ONLINE",
+      Đóng form register
+      rồi mở form login.
+    */
+
+    closeModal();
+
+    showToast(
+      "success",
+      "Tạo tài khoản thành công",
+      "Tài khoản đã được tạo. Hãy đăng nhập để tiếp tục."
+    );
+
+    setTimeout(
+      () => {
+
+        openLogin();
+
+        const emailInput =
+          $("#loginEmail");
+
+        if(emailInput){
+          emailInput.value =
+            email;
+        }
+
+      },
+      350
+    );
+
+  }catch(error){
+
+    showToast(
+      "error",
+      "Tạo tài khoản thất bại",
+      error.message ||
+        "Không thể tạo tài khoản."
+    );
+
+    button.disabled = false;
+
+    button.textContent =
+      "TẠO TÀI KHOẢN";
+  }
+
+}
+
+
+/* =========================================================
+   LOGIN SUBMIT
+========================================================= */
+
+async function submitLogin(event){
+
+  event.preventDefault();
+
+  const button =
+    $("#loginSubmit");
+
+  const email =
+    $("#loginEmail")
+      .value
+      .trim()
+      .toLowerCase();
+
+  const password =
+    $("#loginPassword")
+      .value;
+
+  if(!email || !password){
+
+    showToast(
+      "error",
+      "Đăng nhập thất bại",
+      "Vui lòng nhập đầy đủ email và mật khẩu."
+    );
+
+    return;
+  }
+
+  button.disabled = true;
+
+  button.innerHTML = `
+    <span class="loading">
+      <span class="spinner"></span>
+      ĐANG ĐĂNG NHẬP...
+    </span>
+  `;
+
+  try{
+
+    const data =
+      await api(
+        "/api/auth/login",
         {
-          headers: {
-            "content-type":
-              "text/plain; charset=UTF-8"
-          }
+          method:"POST",
+
+          body:JSON.stringify({
+            email,
+            password
+          })
         }
       );
-    } catch (error) {
-      console.error(error);
 
-      return fail(
-        error?.message ||
-          "Lỗi máy chủ.",
-        500,
-        "SERVER_ERROR"
-      );
-    }
+    currentUser =
+      data.user;
+
+    closeModal();
+
+    updateAccountUI();
+
+    showToast(
+      "success",
+      "Đăng nhập thành công",
+      `Chào mừng ${data.user.email} quay trở lại.`
+    );
+
+  }catch(error){
+
+    showToast(
+      "error",
+      "Đăng nhập thất bại",
+      error.message ||
+        "Email hoặc mật khẩu không đúng."
+    );
+
+    button.disabled = false;
+
+    button.textContent =
+      "ĐĂNG NHẬP";
   }
-};
+
+}
+
+
+/* =========================================================
+   ACCOUNT UI
+========================================================= */
+
+function updateAccountUI(){
+
+  const nav =
+    $("#authNav");
+
+  if(!nav){
+    return;
+  }
+
+  if(!currentUser){
+
+    nav.innerHTML = `
+
+      <button
+        class="btn red"
+        onclick="openLogin()"
+      >
+        ĐĂNG NHẬP
+      </button>
+
+    `;
+
+    return;
+  }
+
+  const initial =
+    String(
+      currentUser.email || "U"
+    )
+      .charAt(0)
+      .toUpperCase();
+
+  nav.innerHTML = `
+
+    <div class="account">
+
+      <button
+        class="account-button"
+        onclick="toggleAccountMenu()"
+      >
+
+        <span class="account-avatar">
+          ${esc(initial)}
+        </span>
+
+        <span class="account-name">
+          ${esc(currentUser.email)}
+        </span>
+
+        <span>
+          ▾
+        </span>
+
+      </button>
+
+      <div
+        id="accountMenu"
+        class="account-menu hide"
+      >
+
+        <div class="account-info">
+
+          <div class="account-email">
+            ${esc(currentUser.email)}
+          </div>
+
+          <div class="account-role">
+            ${esc(
+              currentUser.role ||
+              "USER"
+            )}
+          </div>
+
+        </div>
+
+        <button
+          class="btn ghost"
+          onclick="logout()"
+        >
+          ĐĂNG XUẤT
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+function toggleAccountMenu(){
+
+  const menu =
+    $("#accountMenu");
+
+  if(!menu){
+    return;
+  }
+
+  menu.classList.toggle(
+    "hide"
+  );
+}
+
+
+/* =========================================================
+   LOGOUT
+========================================================= */
+
+async function logout(){
+
+  try{
+
+    const data =
+      await api(
+        "/api/auth/logout",
+        {
+          method:"POST",
+          body:"{}"
+        }
+      );
+
+    currentUser =
+      null;
+
+    updateAccountUI();
+
+    showToast(
+      "success",
+      "Đã đăng xuất",
+      data.message ||
+        "Tài khoản đã được đăng xuất."
+    );
+
+  }catch(error){
+
+    showToast(
+      "error",
+      "Đăng xuất thất bại",
+      error.message ||
+        "Không thể đăng xuất."
+    );
+  }
+
+}
+
+
+/* =========================================================
+   CHECK SESSION
+========================================================= */
+
+async function checkSession(){
+
+  try{
+
+    const data =
+      await api(
+        "/api/auth/me"
+      );
+
+    if(data.authenticated){
+
+      currentUser =
+        data.user;
+
+    }else{
+
+      currentUser =
+        null;
+    }
+
+    updateAccountUI();
+
+  }catch(error){
+
+    console.error(
+      "Session check:",
+      error
+    );
+
+    currentUser =
+      null;
+
+    updateAccountUI();
+  }
+
+}
+
+
+/* =========================================================
+   REGISTER TEAM
+========================================================= */
+
+function openRegister(tournamentId){
+
+  selectedTournamentId =
+    tournamentId || null;
+
+  if(!currentUser){
+
+    modal(`
+
+      <div class="form">
+
+        <h2>
+          ĐĂNG KÝ ĐỘI
+        </h2>
+
+        <p class="muted">
+          Bạn cần đăng nhập trước khi đăng ký đội.
+        </p>
+
+        <div class="actions"
+             style="justify-content:flex-start">
+
+          <button
+            class="btn red"
+            onclick="openLogin()"
+          >
+            ĐĂNG NHẬP
+          </button>
+
+          <button
+            class="btn ghost"
+            onclick="openSignup()"
+          >
+            TẠO TÀI KHOẢN
+          </button>
+
+        </div>
+
+      </div>
+
+    `);
+
+    return;
+  }
+
+  modal(`
+
+    <div class="form">
+
+      <h2>
+        ĐĂNG KÝ ĐỘI
+      </h2>
+
+      <p class="muted">
+        Bạn đang đăng nhập với:
+        <strong>
+          ${esc(currentUser.email)}
+        </strong>
+      </p>
+
+      <p class="muted">
+        Phần đăng ký đội sẽ được kết nối với
+        hệ thống teams / team_members / tournaments.
+      </p>
+
+      <button
+        class="btn red form-submit"
+        onclick="closeModal()"
+      >
+        TIẾP TỤC
+      </button>
+
+    </div>
+
+  `);
+
+}
+
+
+/* =========================================================
+   TOURNAMENTS
+========================================================= */
+
+async function loadTournaments(){
+
+  const container =
+    $("#tournamentCards");
+
+  try{
+
+    const data =
+      await api(
+        "/api/tournaments"
+      );
+
+    const tournaments =
+      data.tournaments || [];
+
+    if(!tournaments.length){
+
+      container.innerHTML = `
+
+        <div class="card">
+
+          <h3>
+            Chưa có giải
+          </h3>
+
+          <p class="muted">
+            Admin hãy tạo giải đầu tiên
+            trong bảng điều khiển.
+          </p>
+
+        </div>
+
+      `;
+
+      return;
+    }
+
+    container.innerHTML =
+      tournaments
+        .map(
+          tournament => `
+
+            <div class="card">
+
+              <h3>
+                ${esc(tournament.name)}
+              </h3>
+
+              <p class="muted">
+                ${esc(
+                  tournament.description ||
+                  "Đăng ký đội và tham gia thi đấu."
+                )}
+              </p>
+
+              <div class="price">
+                ${Number(
+                  tournament.fee || 0
+                ).toLocaleString("vi-VN")}đ
+              </div>
+
+              <p class="muted">
+                Tối đa
+                ${Number(
+                  tournament.max_teams || 0
+                )}
+                đội •
+                ${esc(
+                  tournament.status
+                )}
+              </p>
+
+              <button
+                class="btn red"
+                onclick="
+                  openRegister(
+                    ${Number(tournament.id)}
+                  )
+                "
+              >
+                ĐĂNG KÝ
+              </button>
+
+            </div>
+
+          `
+        )
+        .join("");
+
+  }catch(error){
+
+    console.error(
+      "Tournament:",
+      error
+    );
+
+    container.innerHTML = `
+
+      <div class="card">
+
+        <h3>
+          Không thể tải giải đấu
+        </h3>
+
+        <p class="muted">
+          ${esc(error.message)}
+        </p>
+
+      </div>
+
+    `;
+  }
+
+}
+
+
+/* =========================================================
+   RANKING
+========================================================= */
+
+async function loadRanking(){
+
+  const body =
+    $("#rankBody");
+
+  try{
+
+    const data =
+      await api(
+        "/api/ranking"
+      );
+
+    const rows =
+      data.ranking || [];
+
+    if(!rows.length){
+
+      body.innerHTML = `
+
+        <tr>
+
+          <td
+            colspan="4"
+            class="muted"
+          >
+            Chưa có kết quả.
+          </td>
+
+        </tr>
+
+      `;
+
+      return;
+    }
+
+    body.innerHTML =
+      rows
+        .map(
+          (row,index) => `
+
+            <tr>
+
+              <td>
+                ${index + 1}
+              </td>
+
+              <td>
+                <strong>
+                  ${esc(row.name)}
+                </strong>
+              </td>
+
+              <td>
+                ${Number(
+                  row.kills || 0
+                )}
+              </td>
+
+              <td>
+                <strong>
+                  ${Number(
+                    row.points || 0
+                  )}
+                </strong>
+              </td>
+
+            </tr>
+
+          `
+        )
+        .join("");
+
+  }catch(error){
+
+    console.error(
+      "Ranking:",
+      error
+    );
+
+    body.innerHTML = `
+
+      <tr>
+
+        <td
+          colspan="4"
+          class="muted"
+        >
+          Không thể tải bảng xếp hạng.
+        </td>
+
+      </tr>
+
+    `;
+  }
+
+}
+
+
+/* =========================================================
+   CLOSE ACCOUNT MENU WHEN CLICK OUTSIDE
+========================================================= */
+
+document.addEventListener(
+  "click",
+  event => {
+
+    const account =
+      document.querySelector(
+        ".account"
+      );
+
+    const menu =
+      $("#accountMenu");
+
+    if(
+      account &&
+      menu &&
+      !account.contains(event.target)
+    ){
+
+      menu.classList.add(
+        "hide"
+      );
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   ESC TO CLOSE MODAL
+========================================================= */
+
+document.addEventListener(
+  "keydown",
+  event => {
+
+    if(
+      event.key === "Escape"
+    ){
+
+      closeModal();
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   START
+========================================================= */
+
+async function load(){
+
+  await Promise.all([
+    checkSession(),
+    loadTournaments(),
+    loadRanking()
+  ]);
+
+}
+
+load();
+
+</script>
+
+</body>
+</html>
