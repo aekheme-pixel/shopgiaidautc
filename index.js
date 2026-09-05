@@ -539,9 +539,9 @@ async function handleRegister(request, env) {
   }
 
   const session = await createSession(
-  env.DB,
-  user
-);
+    env.DB,
+    user
+  );
 
   return json(
     {
@@ -622,10 +622,10 @@ async function handleLogin(request, env) {
   }
 
   const session =
-  await createSession(
-    env.DB,
-    user
-  );
+    await createSession(
+      env.DB,
+      user
+    );
 
   return json(
     {
@@ -1432,65 +1432,6 @@ async function getCurrentUser(request, db) {
   return normalizeUserRow(
     row,
     userSchema
-  );
-}
-
-  const expires =
-    Date.parse(
-      String(
-        session.expires_at || ""
-      )
-    );
-
-  if (
-    !Number.isFinite(expires) ||
-    expires <= Date.now()
-  ) {
-    await db
-      .prepare(
-        `DELETE FROM app_sessions
-         WHERE token_hash = ?`
-      )
-      .bind(tokenHash)
-      .run()
-      .catch(() => {});
-
-    return null;
-  }
-
-  const schema =
-    await getUsersSchema(db);
-
-  const idCol =
-    findColumn(schema, [
-      "id",
-      "user_id",
-      "userid",
-    ]);
-
-  if (!idCol) {
-    return null;
-  }
-
-  const row =
-    await db
-      .prepare(
-        `SELECT * FROM users
-         WHERE ${qi(idCol)} = ?
-         LIMIT 1`
-      )
-      .bind(
-        String(session.user_id)
-      )
-      .first();
-
-  if (!row) {
-    return null;
-  }
-
-  return normalizeUserRow(
-    row,
-    schema
   );
 }
 
@@ -2357,14 +2298,6 @@ async function getAppSessionsSchema(db) {
       .all();
 
   return result.results || [];
-}
-
-
-async function getTableSql(
-  db,
-  tableName
-) {
-  // ...
 }
 
 
