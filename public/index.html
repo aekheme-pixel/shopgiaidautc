@@ -2,759 +2,714 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta
-  name="viewport"
-  content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-/>
-
-<title>Giải Đấu Tử Chiến Mùa 1</title>
-
-<meta
-  name="description"
-  content="Giải Đấu Tử Chiến Mùa 1"
-/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050505">
+<title>Giải Đấu Tử Chiến – Mùa 1</title>
 
 <style>
-:root {
-  --bg: #050505;
-  --panel: #111216;
-  --panel2: #16171c;
-  --border: #2c2e36;
-  --text: #f4f4f5;
-  --muted: #9c9da4;
-  --red: #ff2638;
-  --red2: #b5091b;
-  --green: #2ee68a;
-  --yellow: #ffc857;
-  --shadow: 0 30px 100px rgba(0,0,0,.55);
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent;
 }
 
-* {
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
+html{
+  scroll-behavior:smooth;
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  background:
-    radial-gradient(
-      circle at 50% 0%,
-      rgba(255,20,45,.12),
-      transparent 38%
-    ),
-    #050505;
-  color: var(--text);
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Arial,
-    sans-serif;
+body{
+  margin:0;
+  background:#050505;
+  color:#f5f5f5;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
 }
 
 button,
-input {
-  font: inherit;
+input{
+  font:inherit;
 }
 
-button {
-  cursor: pointer;
+button{
+  cursor:pointer;
 }
 
-.container {
-  width: min(1120px, calc(100% - 32px));
-  margin: auto;
+:root{
+  --red:#ff2438;
+  --red2:#ff4050;
+  --panel:#111216;
+  --panel2:#17181d;
+  --line:#303139;
+  --muted:#9b9ca3;
 }
 
-header {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  backdrop-filter: blur(20px);
-  background: rgba(5,5,5,.78);
-  border-bottom: 1px solid rgba(255,255,255,.06);
+/* =========================================================
+   HEADER
+========================================================= */
+
+.header{
+  position:sticky;
+  top:0;
+  z-index:50;
+  height:76px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 5vw;
+  background:rgba(5,5,5,.86);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(255,255,255,.06);
 }
 
-.nav {
-  min-height: 76px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+.logo{
+  font-size:22px;
+  font-weight:1000;
+  letter-spacing:1px;
 }
 
-.logo {
-  font-weight: 1000;
-  letter-spacing: -1px;
-  font-size: 23px;
+.logo span{
+  color:var(--red);
 }
 
-.logo span {
-  color: var(--red);
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
 
-.nav-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.account-btn{
+  min-width:48px;
+  height:48px;
+  padding:0 14px;
+  border-radius:15px;
+  border:1px solid #28292f;
+  background:#0e0f12;
+  color:white;
+  font-weight:900;
 }
 
-.nav-btn {
-  border: 1px solid var(--border);
-  background: #0d0e11;
-  color: var(--text);
-  padding: 12px 17px;
-  border-radius: 14px;
-  font-weight: 800;
+.account-btn.logged{
+  display:flex;
+  align-items:center;
+  gap:9px;
 }
 
-.nav-btn.primary {
-  background: var(--red);
-  border-color: var(--red);
+.avatar{
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:var(--red);
+  font-size:14px;
+  font-weight:1000;
 }
 
-.account-mini {
-  display: none;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px 8px 8px;
-  background: #111216;
-  border: 1px solid var(--border);
-  border-radius: 16px;
+/* =========================================================
+   HERO
+========================================================= */
+
+.hero{
+  min-height:570px;
+  padding:110px 7vw 80px;
+  text-align:center;
+  position:relative;
+  overflow:hidden;
 }
 
-.avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+.hero:before{
+  content:"";
+  position:absolute;
+  width:500px;
+  height:500px;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(
+    circle,
+    rgba(255,25,45,.18),
+    transparent 65%
+  );
+  pointer-events:none;
+}
+
+.hero>*{
+  position:relative;
+}
+
+.badge{
+  display:inline-flex;
+  padding:8px 14px;
+  border:1px solid rgba(255,36,56,.35);
+  border-radius:999px;
+  color:#ff6875;
+  background:rgba(255,36,56,.08);
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:1px;
+}
+
+.hero h1{
+  max-width:950px;
+  margin:25px auto 18px;
+  font-size:clamp(44px,8vw,92px);
+  line-height:.98;
+  font-weight:1000;
+  letter-spacing:-4px;
+}
+
+.hero h1 span{
+  color:var(--red);
+}
+
+.hero p{
+  max-width:760px;
+  margin:auto;
+  color:#aaa;
+  font-size:20px;
+  line-height:1.6;
+}
+
+/* =========================================================
+   CONTENT
+========================================================= */
+
+.container{
+  width:min(1100px,90%);
+  margin:auto;
+}
+
+.section{
+  padding:70px 0;
+}
+
+.section-title{
+  margin-bottom:28px;
+}
+
+.section-title small{
+  color:var(--red);
+  font-weight:1000;
+  letter-spacing:2px;
+}
+
+.section-title h2{
+  margin:7px 0;
+  font-size:clamp(32px,6vw,55px);
+  font-weight:1000;
+}
+
+.section-title p{
+  color:#85868d;
+  font-size:18px;
+}
+
+/* =========================================================
+   TOURNAMENT CARD
+========================================================= */
+
+.tournament-card{
   background:
-    linear-gradient(135deg, #ff3348, #6c0010);
-  font-weight: 1000;
+    linear-gradient(145deg,#17181d,#0c0d10);
+  border:1px solid #292a31;
+  border-radius:30px;
+  padding:30px;
+  box-shadow:0 30px 100px rgba(0,0,0,.35);
 }
 
-.account-mini-name {
-  font-weight: 900;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.tournament-top{
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+  align-items:flex-start;
 }
 
-.hero {
-  padding: 90px 0 55px;
-  text-align: center;
+.tournament-name{
+  font-size:30px;
+  font-weight:1000;
 }
 
-.eyebrow {
-  color: var(--red);
-  font-weight: 1000;
-  letter-spacing: 4px;
-  font-size: 13px;
+.tournament-description{
+  margin-top:10px;
+  color:#999aa2;
+  line-height:1.6;
 }
 
-.hero h1 {
-  margin: 18px auto 15px;
-  max-width: 900px;
-  font-size: clamp(40px, 8vw, 82px);
-  line-height: .98;
-  letter-spacing: -4px;
-  font-weight: 1000;
+.status{
+  white-space:nowrap;
+  padding:9px 13px;
+  border-radius:999px;
+  background:rgba(255,36,56,.12);
+  border:1px solid rgba(255,36,56,.3);
+  color:#ff4757;
+  font-size:13px;
+  font-weight:1000;
 }
 
-.hero h1 span {
-  color: var(--red);
+.tournament-info{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+  margin-top:30px;
 }
 
-.hero p {
-  max-width: 760px;
-  margin: auto;
-  color: var(--muted);
-  font-size: clamp(17px, 3vw, 22px);
-  line-height: 1.7;
+.info-box{
+  padding:18px;
+  border-radius:18px;
+  background:#0b0c0f;
+  border:1px solid #25262d;
 }
 
-.hero-actions {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 30px;
-  flex-wrap: wrap;
+.info-box small{
+  color:#777982;
 }
 
-.big-btn {
-  border: 0;
-  border-radius: 16px;
-  padding: 17px 24px;
-  font-weight: 1000;
-  color: white;
-  background: var(--red);
+.info-box strong{
+  display:block;
+  margin-top:5px;
+  font-size:19px;
 }
 
-.big-btn.secondary {
-  background: #111216;
-  border: 1px solid var(--border);
+.primary{
+  width:100%;
+  border:0;
+  margin-top:22px;
+  padding:18px;
+  border-radius:16px;
+  background:var(--red);
+  color:white;
+  font-weight:1000;
+  font-size:18px;
+  box-shadow:0 10px 30px rgba(255,36,56,.18);
 }
 
-.section {
-  padding: 60px 0;
+.primary:active{
+  transform:scale(.985);
 }
 
-.section-title {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 15px;
-  margin-bottom: 25px;
+/* =========================================================
+   RANKING
+========================================================= */
+
+.ranking{
+  border:1px solid #292a31;
+  border-radius:25px;
+  overflow:hidden;
+  background:#101115;
 }
 
-.section-title h2 {
-  margin: 0;
-  font-size: clamp(30px, 5vw, 48px);
-  letter-spacing: -2px;
+.rank-row{
+  min-height:72px;
+  display:grid;
+  grid-template-columns:60px 1fr 100px;
+  align-items:center;
+  gap:10px;
+  padding:12px 20px;
+  border-bottom:1px solid #222329;
 }
 
-.section-title p {
-  color: var(--muted);
-  margin: 0;
+.rank-row:last-child{
+  border-bottom:0;
 }
 
-.tournament-card {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 28px;
-  padding: 28px;
-  background:
-    radial-gradient(
-      circle at 90% 0%,
-      rgba(255,20,45,.16),
-      transparent 35%
-    ),
-    var(--panel);
-  box-shadow: var(--shadow);
+.rank-number{
+  font-size:20px;
+  font-weight:1000;
+  color:#777982;
 }
 
-.tournament-card::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: var(--red);
+.rank-team{
+  font-weight:900;
 }
 
-.tournament-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
+.rank-points{
+  text-align:right;
+  font-weight:1000;
+  color:var(--red);
 }
 
-.tournament-title {
-  font-size: clamp(26px, 5vw, 42px);
-  font-weight: 1000;
-  letter-spacing: -1.5px;
+.empty-ranking{
+  padding:50px 25px;
+  text-align:center;
+  color:#777982;
 }
 
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 13px;
-  border-radius: 999px;
-  background: rgba(255,38,56,.12);
-  border: 1px solid rgba(255,38,56,.35);
-  color: #ff5361;
-  font-weight: 1000;
-  font-size: 13px;
+.empty-ranking strong{
+  display:block;
+  color:#ddd;
+  font-size:22px;
+  margin-bottom:8px;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--red);
-  box-shadow: 0 0 12px var(--red);
-}
-
-.tournament-description {
-  color: var(--muted);
-  line-height: 1.7;
-  margin: 18px 0;
-}
-
-.tournament-meta {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin: 24px 0;
-}
-
-.meta {
-  background: #0a0b0e;
-  border: 1px solid var(--border);
-  border-radius: 17px;
-  padding: 16px;
-}
-
-.meta small {
-  color: var(--muted);
-  display: block;
-  margin-bottom: 5px;
-}
-
-.meta strong {
-  font-size: 18px;
-}
-
-.rank-card {
-  overflow: hidden;
-  border-radius: 25px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-}
-
-.rank-row {
-  display: grid;
-  grid-template-columns: 70px 1fr 110px 110px;
-  gap: 12px;
-  align-items: center;
-  padding: 17px 20px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-}
-
-.rank-row:last-child {
-  border-bottom: 0;
-}
-
-.rank-head {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.rank-number {
-  color: var(--red);
-  font-weight: 1000;
-}
-
-.empty-ranking {
-  padding: 50px 20px;
-  text-align: center;
-  color: var(--muted);
-}
-
-.empty-ranking strong {
-  display: block;
-  color: white;
-  font-size: 20px;
-  margin-bottom: 8px;
-}
-
-footer {
-  padding: 50px 0 80px;
-  color: #666;
-  text-align: center;
-}
-
-/* ==========================================================
+/* =========================================================
    MODAL
-========================================================== */
+========================================================= */
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgba(0,0,0,.78);
-  backdrop-filter: blur(14px);
+.overlay{
+  position:fixed;
+  inset:0;
+  z-index:100;
+  background:rgba(0,0,0,.78);
+  backdrop-filter:blur(13px);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
 }
 
-.modal-backdrop.show {
-  display: flex;
+.overlay.show{
+  display:flex;
 }
 
-.modal {
-  width: min(700px, 100%);
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  border: 1px solid #30323b;
-  border-radius: 30px;
-  background: #111216;
-  box-shadow: 0 40px 120px rgba(0,0,0,.75);
+.modal{
+  width:min(760px,100%);
+  max-height:92vh;
+  overflow:auto;
+  background:#121318;
+  border:1px solid #35363e;
+  border-radius:30px;
+  padding:42px;
+  position:relative;
+  box-shadow:0 40px 100px rgba(0,0,0,.65);
 }
 
-.modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 32px 32px 15px;
+.close{
+  position:absolute;
+  top:20px;
+  right:20px;
+  width:54px;
+  height:54px;
+  border-radius:16px;
+  border:1px solid #35363e;
+  background:#121318;
+  color:white;
+  font-size:31px;
 }
 
-.modal-head h2 {
-  margin: 0;
-  font-size: clamp(32px, 7vw, 50px);
-  font-weight: 1000;
-  letter-spacing: -2px;
+.modal h2{
+  margin:0 70px 30px 0;
+  font-size:clamp(36px,7vw,54px);
+  font-weight:1000;
 }
 
-.close {
-  flex: 0 0 auto;
-  width: 58px;
-  height: 58px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: #101115;
-  color: white;
-  font-size: 32px;
+.field{
+  margin-top:20px;
 }
 
-.modal-body {
-  padding: 15px 32px 32px;
+.field label{
+  display:block;
+  margin-bottom:10px;
+  color:#b8b9bf;
+  font-size:18px;
+  font-weight:900;
 }
 
-.form-group {
-  margin-top: 20px;
+.input-wrap{
+  position:relative;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 10px;
-  color: #c8c8cc;
-  font-weight: 900;
-  font-size: 17px;
+.field input{
+  width:100%;
+  height:76px;
+  padding:0 22px;
+  border-radius:17px;
+  border:2px solid #35363e;
+  background:#070708;
+  color:#fff;
+  outline:none;
+  font-size:20px;
 }
 
-.input-wrap {
-  position: relative;
+.field input:focus{
+  border-color:#686a74;
 }
 
-.input {
-  width: 100%;
-  height: 72px;
-  border-radius: 17px;
-  border: 1px solid #363840;
-  outline: none;
-  background: #08090b;
-  color: white;
-  padding: 0 18px;
-  font-size: 19px;
+.password-toggle{
+  position:absolute;
+  right:12px;
+  top:50%;
+  transform:translateY(-50%);
+  width:52px;
+  height:52px;
+  border:0;
+  background:transparent;
+  font-size:25px;
 }
 
-.input:focus {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px rgba(255,38,56,.10);
+.form-note{
+  margin-top:20px;
+  color:#777982;
+  line-height:1.5;
 }
 
-.password-toggle {
-  position: absolute;
-  right: 13px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: 0;
-  background: transparent;
-  font-size: 27px;
-  padding: 10px;
+.switch{
+  margin-top:25px;
+  color:#a5a6ac;
+  font-size:18px;
+  font-weight:700;
 }
 
-.form-button {
-  width: 100%;
-  height: 72px;
-  margin-top: 26px;
-  border: 0;
-  border-radius: 17px;
-  background: var(--red);
-  color: white;
-  font-size: 22px;
-  font-weight: 1000;
+.switch button{
+  border:0;
+  background:none;
+  color:var(--red);
+  font-weight:1000;
+  padding:0;
 }
 
-.form-button:disabled {
-  opacity: .6;
-}
-
-.switch {
-  margin-top: 25px;
-  color: #a5a5ab;
-  font-size: 18px;
-}
-
-.switch button {
-  border: 0;
-  background: transparent;
-  color: var(--red);
-  font-weight: 1000;
-  padding: 0;
-}
-
-.form-note {
-  margin-top: 22px;
-  color: #777980;
-  line-height: 1.6;
-}
-
-/* ==========================================================
+/* =========================================================
    ACCOUNT
-========================================================== */
+========================================================= */
 
-.account-panel {
-  display: none;
+.account-card{
+  background:#101115;
+  border:1px solid #303139;
+  border-radius:25px;
+  padding:25px;
 }
 
-.account-panel.show {
-  display: block;
+.account-head{
+  display:flex;
+  align-items:center;
+  gap:15px;
 }
 
-.account-card {
-  border: 1px solid var(--border);
-  border-radius: 28px;
+.big-avatar{
+  width:65px;
+  height:65px;
+  border-radius:20px;
+  display:grid;
+  place-items:center;
+  background:var(--red);
+  font-size:26px;
+  font-weight:1000;
+}
+
+.account-name{
+  font-size:24px;
+  font-weight:1000;
+}
+
+.account-email{
+  margin-top:3px;
+  color:#777982;
+}
+
+.balance{
+  margin-top:25px;
+  padding:22px;
+  border-radius:20px;
+  background:#08090b;
+  border:1px solid #25262d;
+}
+
+.balance small{
+  color:#777982;
+}
+
+.balance strong{
+  display:block;
+  margin-top:5px;
+  font-size:34px;
+}
+
+.logout{
+  width:100%;
+  margin-top:16px;
+  padding:16px;
+  border-radius:15px;
+  background:transparent;
+  border:1px solid #34353d;
+  color:#fff;
+  font-weight:1000;
+}
+
+/* =========================================================
+   TEAM
+========================================================= */
+
+.payment-box{
+  margin-top:25px;
+  padding:22px;
+  border-radius:20px;
+  background:#090a0c;
+  border:1px solid #292a31;
+}
+
+.qr{
+  width:220px;
+  height:220px;
+  margin:18px auto;
+  border-radius:20px;
   background:
-    radial-gradient(
-      circle at 100% 0,
-      rgba(255,38,56,.16),
-      transparent 35%
-    ),
-    var(--panel);
-  padding: 28px;
+    repeating-linear-gradient(
+      45deg,
+      #fff 0 4px,
+      #111 4px 8px
+    );
+  display:grid;
+  place-items:center;
+  color:#fff;
+  font-weight:1000;
+  text-align:center;
+  padding:25px;
 }
 
-.account-main {
-  display: flex;
-  align-items: center;
-  gap: 17px;
+.payment-note{
+  text-align:center;
+  color:#8c8d94;
+  font-size:14px;
+  line-height:1.5;
 }
 
-.account-big-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 22px;
-  display: grid;
-  place-items: center;
-  font-size: 28px;
-  font-weight: 1000;
-  background:
-    linear-gradient(135deg, #ff3348, #65000c);
-}
-
-.account-name {
-  font-size: 25px;
-  font-weight: 1000;
-}
-
-.account-email {
-  color: var(--muted);
-  margin-top: 5px;
-}
-
-.balance-card {
-  margin-top: 24px;
-  border: 1px solid var(--border);
-  background: #08090b;
-  border-radius: 20px;
-  padding: 20px;
-}
-
-.balance-card small {
-  color: var(--muted);
-}
-
-.balance {
-  font-size: 32px;
-  font-weight: 1000;
-  margin-top: 7px;
-}
-
-.account-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 18px;
-}
-
-.account-actions button {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #15161a;
-  color: white;
-  padding: 13px 16px;
-  font-weight: 900;
-}
-
-.account-actions .logout {
-  color: #ff5361;
-}
-
-/* ==========================================================
-   PAYMENT / TEAM
-========================================================== */
-
-.payment-box {
-  margin-top: 22px;
-  padding: 20px;
-  border-radius: 20px;
-  background: #08090b;
-  border: 1px solid var(--border);
-}
-
-.qr {
-  width: min(280px, 100%);
-  aspect-ratio: 1;
-  margin: 15px auto;
-  display: grid;
-  place-items: center;
-  background: white;
-  color: #111;
-  border-radius: 18px;
-  text-align: center;
-  padding: 20px;
-  font-weight: 1000;
-}
-
-.bank-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 15px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-}
-
-.bank-line:last-child {
-  border-bottom: 0;
-}
-
-.bank-line span:first-child {
-  color: var(--muted);
-}
-
-/* ==========================================================
+/* =========================================================
    TOAST
-========================================================== */
+========================================================= */
 
-.toast-area {
-  position: fixed;
-  z-index: 500;
-  top: max(18px, env(safe-area-inset-top));
-  left: 50%;
-  width: min(720px, calc(100% - 28px));
-  transform: translateX(-50%);
-  pointer-events: none;
+.toast-layer{
+  position:fixed;
+  top:20px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:300;
+  width:min(760px,calc(100% - 30px));
+  pointer-events:none;
 }
 
-.toast {
-  display: none;
-  pointer-events: auto;
-  padding: 19px 20px;
-  margin-bottom: 12px;
-  border-radius: 18px;
-  border: 1px solid #373940;
-  border-left: 6px solid var(--red);
-  background: #17181d;
-  box-shadow: 0 20px 70px rgba(0,0,0,.55);
+.toast{
+  pointer-events:auto;
+  display:flex;
+  gap:15px;
+  padding:20px;
+  border-radius:22px;
+  background:#17181d;
+  border:1px solid #35363e;
+  border-left:8px solid var(--red);
+  box-shadow:0 25px 80px rgba(0,0,0,.55);
+  animation:toastIn .25s ease;
 }
 
-.toast.show {
-  display: block;
-  animation: toastIn .25s ease;
+.toast.success{
+  border-left-color:#2fd36b;
 }
 
-.toast.success {
-  border-left-color: var(--green);
+.toast-icon{
+  width:38px;
+  height:38px;
+  flex:0 0 38px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:rgba(255,36,56,.18);
+  color:var(--red);
+  font-weight:1000;
 }
 
-.toast-title {
-  font-size: 18px;
-  font-weight: 1000;
+.toast.success .toast-icon{
+  background:rgba(47,211,107,.15);
+  color:#2fd36b;
 }
 
-.toast-message {
-  margin-top: 6px;
-  color: #b4b4ba;
-  line-height: 1.5;
+.toast-title{
+  font-size:18px;
+  font-weight:1000;
 }
 
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
+.toast-message{
+  margin-top:5px;
+  color:#aaa;
+  line-height:1.45;
+  word-break:break-word;
+}
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
+.toast-close{
+  margin-left:auto;
+  background:none;
+  border:0;
+  color:#777982;
+  font-size:22px;
+}
+
+@keyframes toastIn{
+  from{
+    opacity:0;
+    transform:translateY(-15px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0);
   }
 }
 
-/* ==========================================================
-   RESPONSIVE
-========================================================== */
+/* =========================================================
+   FOOTER
+========================================================= */
 
-@media (max-width: 700px) {
-  .container {
-    width: min(100% - 24px, 1120px);
+footer{
+  padding:60px 5vw;
+  text-align:center;
+  color:#55565d;
+  border-top:1px solid #141519;
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media(max-width:650px){
+
+  .header{
+    padding:0 20px;
   }
 
-  .hero {
-    padding: 65px 0 35px;
+  .logo{
+    font-size:17px;
   }
 
-  .hero h1 {
-    letter-spacing: -2.5px;
+  .hero{
+    padding:80px 25px 60px;
+    min-height:520px;
   }
 
-  .section {
-    padding: 40px 0;
+  .hero h1{
+    letter-spacing:-2px;
   }
 
-  .tournament-meta {
-    grid-template-columns: 1fr;
+  .hero p{
+    font-size:17px;
   }
 
-  .rank-row {
-    grid-template-columns: 45px 1fr 70px;
+  .section{
+    padding:50px 0;
   }
 
-  .rank-row > :last-child {
-    display: none;
+  .tournament-card{
+    padding:22px;
+    border-radius:24px;
   }
 
-  .modal-backdrop {
-    padding: 12px;
-    align-items: flex-end;
+  .tournament-top{
+    flex-direction:column;
   }
 
-  .modal {
-    max-height: calc(100vh - 24px);
-    border-radius: 28px 28px 20px 20px;
+  .tournament-info{
+    grid-template-columns:1fr;
   }
 
-  .modal-head {
-    padding: 25px 24px 10px;
+  .modal{
+    padding:32px 24px;
+    border-radius:25px;
   }
 
-  .modal-body {
-    padding: 10px 24px 26px;
+  .modal h2{
+    font-size:38px;
   }
 
-  .input {
-    height: 68px;
+  .field input{
+    height:72px;
   }
 
-  .form-button {
-    height: 68px;
+  .rank-row{
+    grid-template-columns:45px 1fr 80px;
+    padding:12px 15px;
   }
 }
 </style>
@@ -762,680 +717,593 @@ footer {
 
 <body>
 
-<div class="toast-area" id="toastArea"></div>
+<!-- ======================================================
+     HEADER
+====================================================== -->
 
-<header>
-  <div class="container nav">
+<header class="header">
+  <div class="logo">
+    TỬ CHIẾN <span>MÙA 1</span>
+  </div>
 
-    <div class="logo">
-      TỬ CHIẾN <span>MÙA 1</span>
+  <div class="header-actions">
+    <button
+      class="account-btn"
+      id="accountButton"
+      onclick="openAccountOrLogin()">
+      ☰
+    </button>
+  </div>
+</header>
+
+<!-- ======================================================
+     HERO
+====================================================== -->
+
+<section class="hero">
+  <div class="badge">MÙA 1 • ONLINE TOURNAMENT</div>
+
+  <h1>
+    GIẢI ĐẤU <span>TỬ CHIẾN</span><br>
+    MÙA 1
+  </h1>
+
+  <p>
+    Đăng ký đội tuyển, tham gia những trận đấu
+    2vs2 đầy cạnh tranh và chinh phục bảng xếp hạng.
+  </p>
+</section>
+
+<!-- ======================================================
+     TOURNAMENT
+====================================================== -->
+
+<section class="section">
+  <div class="container">
+
+    <div class="section-title">
+      <small>LỊCH THI ĐẤU</small>
+      <h2>GIẢI ĐẤU</h2>
+      <p>Những trận đấu sắp diễn ra.</p>
     </div>
 
-    <div class="nav-right">
+    <div class="tournament-card">
 
-      <div
-        class="account-mini"
-        id="accountMini"
-        onclick="openAccount()"
-      >
-        <div class="avatar" id="miniAvatar">U</div>
+      <div class="tournament-top">
 
-        <div class="account-mini-name" id="miniName">
-          Tài khoản
+        <div>
+          <div
+            class="tournament-name"
+            id="tournamentName">
+            Giải 2vs2 chủ nhật tới
+          </div>
+
+          <div
+            class="tournament-description"
+            id="tournamentDescription">
+            Giải đấu 2vs2 dành cho các team đăng ký trực tuyến.
+          </div>
         </div>
+
+        <div class="status" id="tournamentStatus">
+          CÒN SLOT
+        </div>
+
+      </div>
+
+      <div class="tournament-info">
+
+        <div class="info-box">
+          <small>THỂ THỨC</small>
+          <strong>2 VS 2</strong>
+        </div>
+
+        <div class="info-box">
+          <small>THỜI GIAN</small>
+          <strong>CHỦ NHẬT</strong>
+        </div>
+
+        <div class="info-box">
+          <small>TRẠNG THÁI</small>
+          <strong id="slotText">CÒN SLOT</strong>
+        </div>
+
       </div>
 
       <button
-        class="nav-btn"
-        id="loginNav"
-        onclick="openLogin()"
-      >
-        ĐĂNG NHẬP
-      </button>
-
-      <button
-        class="nav-btn primary"
-        id="registerNav"
-        onclick="openRegister()"
-      >
-        ĐĂNG KÝ
+        class="primary"
+        onclick="openTournament()">
+        ĐĂNG KÝ THAM GIA
       </button>
 
     </div>
   </div>
-</header>
+</section>
 
+<!-- ======================================================
+     RANKING
+====================================================== -->
 
-<main>
-
-<section class="hero">
+<section class="section">
   <div class="container">
 
-    <div class="eyebrow">
-      CUSTOM 151 • SURVIVAL ARENA
+    <div class="section-title">
+      <small>BẢNG XẾP HẠNG</small>
+      <h2>TOP TEAM</h2>
+      <p>Thành tích thi đấu của các đội.</p>
     </div>
 
-    <h1>
-      NƠI ĐỘI TUYỂN KHẲNG ĐỊNH
-      <span>ĐẲNG CẤP</span>
-    </h1>
-
-    <p>
-      Đăng ký đội tuyển, chọn khung giờ và sẵn sàng
-      bước vào những trận đấu sinh tồn đầy cạnh tranh.
-    </p>
-
-    <div class="hero-actions">
-      <button
-        class="big-btn"
-        onclick="scrollToTournament()"
-      >
-        XEM GIẢI ĐẤU
-      </button>
-
-      <button
-        class="big-btn secondary"
-        onclick="openRegister()"
-      >
-        TẠO TÀI KHOẢN
-      </button>
+    <div
+      class="ranking"
+      id="ranking">
+      <div class="empty-ranking">
+        <strong>Chưa có team nào</strong>
+        Hãy trở thành đội đầu tiên xuất hiện trên bảng xếp hạng.
+      </div>
     </div>
 
   </div>
 </section>
 
+<footer>
+  © 2026 GIẢI ĐẤU TỬ CHIẾN – MÙA 1
+</footer>
 
-<!-- ACCOUNT -->
+<!-- ======================================================
+     TOAST
+====================================================== -->
 
-<section
-  class="section account-panel"
-  id="accountSection"
->
-  <div class="container">
+<div
+  class="toast-layer"
+  id="toastLayer">
+</div>
 
-    <div class="section-title">
-      <div>
-        <h2>TÀI KHOẢN</h2>
-        <p>Thông tin tài khoản của bạn</p>
+<!-- ======================================================
+     LOGIN MODAL
+====================================================== -->
+
+<div
+  class="overlay"
+  id="loginModal">
+
+  <div class="modal">
+
+    <button
+      class="close"
+      onclick="closeModal('loginModal')">
+      ×
+    </button>
+
+    <h2>ĐĂNG NHẬP</h2>
+
+    <form onsubmit="login(event)">
+
+      <div class="field">
+        <label>Email</label>
+
+        <input
+          id="loginEmail"
+          type="email"
+          autocomplete="email"
+          placeholder="Email"
+          required>
       </div>
+
+      <div class="field">
+        <label>Mật khẩu</label>
+
+        <div class="input-wrap">
+
+          <input
+            id="loginPassword"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Mật khẩu"
+            required>
+
+          <button
+            type="button"
+            class="password-toggle"
+            onclick="togglePassword('loginPassword',this)">
+            👁️
+          </button>
+
+        </div>
+      </div>
+
+      <button
+        class="primary"
+        type="submit"
+        id="loginSubmit">
+        ĐĂNG NHẬP
+      </button>
+
+    </form>
+
+    <div class="switch">
+      Chưa có tài khoản?
+      <button onclick="switchToRegister()">
+        Đăng ký ngay
+      </button>
     </div>
+
+  </div>
+</div>
+
+<!-- ======================================================
+     REGISTER MODAL
+====================================================== -->
+
+<div
+  class="overlay"
+  id="registerModal">
+
+  <div class="modal">
+
+    <button
+      class="close"
+      onclick="closeModal('registerModal')">
+      ×
+    </button>
+
+    <h2>TẠO TÀI KHOẢN</h2>
+
+    <form onsubmit="register(event)">
+
+      <div class="field">
+        <label>Tên tài khoản</label>
+
+        <input
+          id="registerUsername"
+          type="text"
+          autocomplete="username"
+          placeholder="Tên tài khoản"
+          maxlength="40"
+          required>
+      </div>
+
+      <div class="field">
+        <label>Email</label>
+
+        <input
+          id="registerEmail"
+          type="email"
+          autocomplete="email"
+          placeholder="Email"
+          required>
+      </div>
+
+      <div class="field">
+        <label>Mật khẩu</label>
+
+        <div class="input-wrap">
+
+          <input
+            id="registerPassword"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Mật khẩu"
+            required>
+
+          <button
+            type="button"
+            class="password-toggle"
+            onclick="togglePassword('registerPassword',this)">
+            👁️
+          </button>
+
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Nhập lại mật khẩu</label>
+
+        <div class="input-wrap">
+
+          <input
+            id="registerPasswordConfirm"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Nhập lại mật khẩu"
+            required>
+
+          <button
+            type="button"
+            class="password-toggle"
+            onclick="togglePassword('registerPasswordConfirm',this)">
+            👁️
+          </button>
+
+        </div>
+      </div>
+
+      <button
+        class="primary"
+        type="submit"
+        id="registerSubmit">
+        TẠO TÀI KHOẢN
+      </button>
+
+    </form>
+
+    <div class="switch">
+      Đã có tài khoản?
+      <button onclick="switchToLogin()">
+        Đăng nhập
+      </button>
+    </div>
+
+    <div class="form-note">
+      Tên tài khoản dùng để hiển thị trên hệ thống.
+      Mật khẩu được hash phía Cloudflare Worker.
+    </div>
+
+  </div>
+</div>
+
+<!-- ======================================================
+     ACCOUNT MODAL
+====================================================== -->
+
+<div
+  class="overlay"
+  id="accountModal">
+
+  <div class="modal">
+
+    <button
+      class="close"
+      onclick="closeModal('accountModal')">
+      ×
+    </button>
+
+    <h2>TÀI KHOẢN</h2>
 
     <div class="account-card">
 
-      <div class="account-main">
+      <div class="account-head">
 
         <div
-          class="account-big-avatar"
-          id="bigAvatar"
-        >
+          class="big-avatar"
+          id="accountAvatar">
           U
         </div>
 
         <div>
           <div
             class="account-name"
-            id="accountName"
-          >
+            id="accountName">
             Tài khoản
           </div>
 
           <div
             class="account-email"
-            id="accountEmail"
-          >
-            -
+            id="accountEmail">
+            —
           </div>
         </div>
 
       </div>
 
-      <div class="balance-card">
+      <div class="balance">
+        <small>SỐ DƯ</small>
 
-        <small>SỐ DƯ TÀI KHOẢN</small>
-
-        <div
-          class="balance"
-          id="accountBalance"
-        >
-          0 ₫
-        </div>
-
-      </div>
-
-      <div class="account-actions">
-
-        <button
-          onclick="scrollToTournament()"
-        >
-          ⚔️ Đăng ký giải
-        </button>
-
-        <button
-          onclick="openAccount()"
-        >
-          👤 Tài khoản
-        </button>
-
-        <button
-          class="logout"
-          onclick="logout()"
-        >
-          Đăng xuất
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
-</section>
-
-
-<!-- TOURNAMENT -->
-
-<section
-  class="section"
-  id="tournamentSection"
->
-  <div class="container">
-
-    <div class="section-title">
-      <div>
-        <h2>GIẢI <span style="color:var(--red)">ĐẤU</span></h2>
-        <p>Lịch thi đấu và đăng ký đội tuyển</p>
-      </div>
-    </div>
-
-    <div
-      class="tournament-card"
-      id="tournamentCard"
-    >
-
-      <div class="tournament-top">
-
-        <div
-          class="tournament-title"
-          id="tournamentName"
-        >
-          GIẢI 2VS2 CHỦ NHẬT TỚI
-        </div>
-
-        <div class="status">
-          <span class="status-dot"></span>
-          CÒN SLOT
-        </div>
-
-      </div>
-
-      <div
-        class="tournament-description"
-        id="tournamentDescription"
-      >
-        Giải đấu 2vs2 sinh tồn. Hãy chuẩn bị đội hình
-        và sẵn sàng chiến đấu.
-      </div>
-
-      <div class="tournament-meta">
-
-        <div class="meta">
-          <small>THỂ THỨC</small>
-          <strong>2 VS 2</strong>
-        </div>
-
-        <div class="meta">
-          <small>THỜI GIAN</small>
-          <strong>CHỦ NHẬT</strong>
-        </div>
-
-        <div class="meta">
-          <small>TRẠNG THÁI</small>
-          <strong style="color:var(--red)">
-            CÒN SLOT
-          </strong>
-        </div>
-
+        <strong id="accountBalance">
+          0đ
+        </strong>
       </div>
 
       <button
-        class="big-btn"
-        style="width:100%"
-        onclick="openTeamRegistration()"
-      >
-        ĐĂNG KÝ ĐỘI TUYỂN
+        class="logout"
+        onclick="logout()">
+        ĐĂNG XUẤT
       </button>
-
-    </div>
-
-  </div>
-</section>
-
-
-<!-- RANKING -->
-
-<section class="section">
-
-  <div class="container">
-
-    <div class="section-title">
-      <div>
-        <h2>BẢNG XẾP HẠNG</h2>
-        <p>Thành tích các đội tuyển</p>
-      </div>
-    </div>
-
-    <div class="rank-card">
-
-      <div class="rank-row rank-head">
-        <div>#</div>
-        <div>ĐỘI TUYỂN</div>
-        <div>ĐIỂM</div>
-        <div>THẮNG</div>
-      </div>
-
-      <div id="rankingBody">
-
-        <div class="empty-ranking">
-          <strong>Chưa có team nào</strong>
-          Bảng xếp hạng sẽ xuất hiện khi giải đấu bắt đầu.
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-
-</section>
-
-</main>
-
-
-<footer>
-  <div class="container">
-    GIẢI ĐẤU TỬ CHIẾN MÙA 1
-    <br>
-    <span>Competitive survival arena</span>
-  </div>
-</footer>
-
-
-<!-- ========================================================
-     LOGIN MODAL
-========================================================= -->
-
-<div
-  class="modal-backdrop"
-  id="loginModal"
->
-  <div class="modal">
-
-    <div class="modal-head">
-
-      <h2>ĐĂNG NHẬP</h2>
-
-      <button
-        class="close"
-        onclick="closeModals()"
-      >
-        ×
-      </button>
-
-    </div>
-
-    <div class="modal-body">
-
-      <form id="loginForm">
-
-        <div class="form-group">
-          <label>Email</label>
-
-          <input
-            class="input"
-            id="loginEmail"
-            type="email"
-            autocomplete="email"
-            placeholder="you@gmail.com"
-            required
-          >
-        </div>
-
-        <div class="form-group">
-          <label>Mật khẩu</label>
-
-          <div class="input-wrap">
-
-            <input
-              class="input"
-              id="loginPassword"
-              type="password"
-              autocomplete="current-password"
-              placeholder="Nhập mật khẩu"
-              required
-            >
-
-            <button
-              type="button"
-              class="password-toggle"
-              onclick="togglePassword('loginPassword', this)"
-            >
-              👁
-            </button>
-
-          </div>
-        </div>
-
-        <button
-          class="form-button"
-          id="loginButton"
-          type="submit"
-        >
-          ĐĂNG NHẬP
-        </button>
-
-      </form>
-
-      <div class="switch">
-        Chưa có tài khoản?
-        <button onclick="switchToRegister()">
-          Đăng ký ngay
-        </button>
-      </div>
 
     </div>
 
   </div>
 </div>
 
-
-<!-- ========================================================
-     REGISTER MODAL
-========================================================= -->
-
-<div
-  class="modal-backdrop"
-  id="registerModal"
->
-  <div class="modal">
-
-    <div class="modal-head">
-
-      <h2>TẠO TÀI KHOẢN</h2>
-
-      <button
-        class="close"
-        onclick="closeModals()"
-      >
-        ×
-      </button>
-
-    </div>
-
-    <div class="modal-body">
-
-      <form id="registerForm">
-
-        <div class="form-group">
-          <label>Tên tài khoản</label>
-
-          <input
-            class="input"
-            id="registerUsername"
-            type="text"
-            autocomplete="username"
-            placeholder="Tên tài khoản"
-            maxlength="32"
-            required
-          >
-        </div>
-
-        <div class="form-group">
-          <label>Email</label>
-
-          <input
-            class="input"
-            id="registerEmail"
-            type="email"
-            autocomplete="email"
-            placeholder="you@gmail.com"
-            required
-          >
-        </div>
-
-        <div class="form-group">
-          <label>Mật khẩu</label>
-
-          <div class="input-wrap">
-
-            <input
-              class="input"
-              id="registerPassword"
-              type="password"
-              autocomplete="new-password"
-              placeholder="Ít nhất 8 ký tự"
-              minlength="8"
-              required
-            >
-
-            <button
-              type="button"
-              class="password-toggle"
-              onclick="togglePassword('registerPassword', this)"
-            >
-              👁
-            </button>
-
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Nhập lại mật khẩu</label>
-
-          <div class="input-wrap">
-
-            <input
-              class="input"
-              id="registerPasswordConfirm"
-              type="password"
-              autocomplete="new-password"
-              placeholder="Nhập lại mật khẩu"
-              minlength="8"
-              required
-            >
-
-            <button
-              type="button"
-              class="password-toggle"
-              onclick="togglePassword('registerPasswordConfirm', this)"
-            >
-              👁
-            </button>
-
-          </div>
-        </div>
-
-        <button
-          class="form-button"
-          id="registerButton"
-          type="submit"
-        >
-          TẠO TÀI KHOẢN
-        </button>
-
-      </form>
-
-      <div class="switch">
-        Đã có tài khoản?
-        <button onclick="switchToLogin()">
-          Đăng nhập
-        </button>
-      </div>
-
-      <div class="form-note">
-        Tên tài khoản dùng để hiển thị trên hệ thống.
-        Mật khẩu được hash phía Cloudflare Worker.
-      </div>
-
-    </div>
-
-  </div>
-</div>
-
-
-<!-- ========================================================
-     TEAM REGISTRATION MODAL
-========================================================= -->
+<!-- ======================================================
+     TOURNAMENT REGISTER MODAL
+====================================================== -->
 
 <div
-  class="modal-backdrop"
-  id="teamModal"
->
+  class="overlay"
+  id="tournamentModal">
+
   <div class="modal">
 
-    <div class="modal-head">
+    <button
+      class="close"
+      onclick="closeModal('tournamentModal')">
+      ×
+    </button>
 
-      <h2>ĐĂNG KÝ TEAM</h2>
+    <h2>ĐĂNG KÝ TEAM</h2>
 
-      <button
-        class="close"
-        onclick="closeModals()"
-      >
-        ×
-      </button>
+    <form onsubmit="registerTeam(event)">
 
-    </div>
-
-    <div class="modal-body">
-
-      <form id="teamForm">
+      <div class="field">
+        <label>Tên team</label>
 
         <input
-          type="hidden"
-          id="teamTournamentId"
-          value="1"
+          id="teamName"
+          type="text"
+          placeholder="Tên team"
+          maxlength="50"
+          required>
+      </div>
+
+      <div class="field">
+        <label>Email team</label>
+
+        <input
+          id="teamEmail"
+          type="email"
+          placeholder="Email nhận thông báo"
+          required>
+      </div>
+
+      <div class="field">
+        <label>Logo team</label>
+
+        <input
+          id="teamLogo"
+          type="url"
+          placeholder="https://..."
         >
+      </div>
 
-        <div class="form-group">
-          <label>Tên team</label>
+      <button
+        class="primary"
+        type="submit"
+        id="teamSubmit">
+        ĐĂNG KÝ TEAM
+      </button>
 
-          <input
-            class="input"
-            id="teamName"
-            type="text"
-            maxlength="60"
-            placeholder="Ví dụ: Tử Chiến Elite"
-            required
-          >
-        </div>
+    </form>
 
-        <div class="form-group">
-          <label>Logo team</label>
+    <div class="payment-box">
 
-          <input
-            class="input"
-            id="teamLogo"
-            type="url"
-            placeholder="https://..."
-          >
-        </div>
+      <strong>THANH TOÁN</strong>
 
-        <div class="form-group">
-          <label>Gmail nhận thông tin</label>
+      <div class="qr">
+        QR BANK
+      </div>
 
-          <input
-            class="input"
-            id="teamEmail"
-            type="email"
-            placeholder="team@gmail.com"
-            required
-          >
-        </div>
-
-        <div class="payment-box">
-
-          <strong>THANH TOÁN LỆ PHÍ</strong>
-
-          <p style="color:var(--muted);line-height:1.6">
-            Quét QR bên dưới để thanh toán.
-            Sau khi hệ thống được kết nối webhook ngân hàng,
-            trạng thái có thể tự động cập nhật 24/7.
-          </p>
-
-          <div class="qr">
-            QR BANK<br>
-            ĐANG CHỜ CẤU HÌNH
-          </div>
-
-          <div class="bank-line">
-            <span>Ngân hàng</span>
-            <strong id="bankName">
-              CHƯA CẤU HÌNH
-            </strong>
-          </div>
-
-          <div class="bank-line">
-            <span>Số tài khoản</span>
-            <strong id="bankAccount">
-              CHƯA CẤU HÌNH
-            </strong>
-          </div>
-
-          <div class="bank-line">
-            <span>Nội dung</span>
-            <strong>
-              TEAM + EMAIL
-            </strong>
-          </div>
-
-        </div>
-
-        <button
-          class="form-button"
-          id="teamButton"
-          type="submit"
-        >
-          XÁC NHẬN ĐĂNG KÝ
-        </button>
-
-      </form>
+      <div class="payment-note">
+        QR ngân hàng sẽ được cấu hình theo tài khoản nhận tiền
+        của giải. Hệ thống có thể mở rộng để đối soát
+        thanh toán tự động 24/7.
+      </div>
 
     </div>
 
   </div>
 </div>
 
-
 <script>
-"use strict";
-
-
-// ==========================================================
-// STATE
-// ==========================================================
+/* =========================================================
+   GLOBAL
+========================================================= */
 
 let currentUser = null;
-let currentTournament = {
-  id: 1,
-  name: "GIẢI 2VS2 CHỦ NHẬT TỚI",
-  description:
-    "Giải đấu 2vs2 sinh tồn. Hãy chuẩn bị đội hình và sẵn sàng chiến đấu.",
-  status: "OPEN",
-  fee: 0
-};
 
+const $ = id => document.getElementById(id);
 
-// ==========================================================
-// API
-// ==========================================================
+/* =========================================================
+   MODAL
+========================================================= */
 
-async function api(path, options = {}) {
+function openModal(id){
+  $(id).classList.add("show");
+  document.body.style.overflow = "hidden";
+}
 
+function closeModal(id){
+  $(id).classList.remove("show");
+
+  if (!document.querySelector(".overlay.show")) {
+    document.body.style.overflow = "";
+  }
+}
+
+function closeAllModals(){
+  document.querySelectorAll(".overlay").forEach(el => {
+    el.classList.remove("show");
+  });
+
+  document.body.style.overflow = "";
+}
+
+function switchToRegister(){
+  closeModal("loginModal");
+  setTimeout(() => openModal("registerModal"), 100);
+}
+
+function switchToLogin(){
+  closeModal("registerModal");
+  setTimeout(() => openModal("loginModal"), 100);
+}
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+function showToast(
+  title,
+  message,
+  success = false
+){
+  const layer = $("toastLayer");
+
+  const toast = document.createElement("div");
+
+  toast.className =
+    "toast " + (success ? "success" : "");
+
+  toast.innerHTML = `
+    <div class="toast-icon">
+      ${success ? "✓" : "!"}
+    </div>
+
+    <div style="flex:1">
+      <div class="toast-title">
+        ${escapeHtml(title)}
+      </div>
+
+      <div class="toast-message">
+        ${escapeHtml(message)}
+      </div>
+    </div>
+
+    <button
+      class="toast-close"
+      aria-label="Đóng">
+      ×
+    </button>
+  `;
+
+  toast
+    .querySelector(".toast-close")
+    .onclick = () => toast.remove();
+
+  layer.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 5000);
+}
+
+/* =========================================================
+   HTML ESCAPE
+========================================================= */
+
+function escapeHtml(value){
+  return String(value ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+/* =========================================================
+   API
+========================================================= */
+
+async function apiFetch(
+  url,
+  options = {}
+){
   const response = await fetch(
-    path,
+    url,
     {
-      credentials: "same-origin",
+      credentials:"include",
       ...options,
-      headers: {
-        "content-type": "application/json",
+      headers:{
+        "Content-Type":"application/json",
         ...(options.headers || {})
       }
     }
@@ -1443,15 +1311,16 @@ async function api(path, options = {}) {
 
   let data;
 
-  try {
+  try{
     data = await response.json();
-  } catch {
-    throw new Error(
-      `Máy chủ trả về dữ liệu không hợp lệ (${response.status}).`
-    );
+  }catch{
+    data = {
+      success:false,
+      message:"Server trả về dữ liệu không hợp lệ."
+    };
   }
 
-  if (!response.ok || data.success === false) {
+  if (!response.ok || data.success === false){
     throw new Error(
       data.message ||
       "Có lỗi xảy ra."
@@ -1461,853 +1330,581 @@ async function api(path, options = {}) {
   return data;
 }
 
-
-// ==========================================================
-// TOAST
-// ==========================================================
-
-function escapeHTML(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function showToast(
-  title,
-  message,
-  type = "error"
-) {
-  const area =
-    document.getElementById("toastArea");
-
-  const toast =
-    document.createElement("div");
-
-  toast.className =
-    `toast ${type === "success" ? "success" : ""}`;
-
-  toast.innerHTML = `
-    <div class="toast-title">
-      ${escapeHTML(title)}
-    </div>
-
-    <div class="toast-message">
-      ${escapeHTML(message)}
-    </div>
-  `;
-
-  area.appendChild(toast);
-
-  requestAnimationFrame(() => {
-    toast.classList.add("show");
-  });
-
-  setTimeout(() => {
-    toast.classList.remove("show");
-
-    setTimeout(() => {
-      toast.remove();
-    }, 250);
-
-  }, 5000);
-}
-
-
-// ==========================================================
-// MODALS
-// ==========================================================
-
-function closeModals() {
-  document
-    .querySelectorAll(".modal-backdrop")
-    .forEach(el => {
-      el.classList.remove("show");
-    });
-}
-
-function openLogin() {
-  closeModals();
-
-  document
-    .getElementById("loginModal")
-    .classList.add("show");
-
-  setTimeout(() => {
-    document
-      .getElementById("loginEmail")
-      .focus();
-  }, 100);
-}
-
-function openRegister() {
-  closeModals();
-
-  document
-    .getElementById("registerModal")
-    .classList.add("show");
-
-  setTimeout(() => {
-    document
-      .getElementById("registerUsername")
-      .focus();
-  }, 100);
-}
-
-function openAccount() {
-
-  if (!currentUser) {
-    openLogin();
-    return;
-  }
-
-  closeModals();
-
-  document
-    .getElementById("accountSection")
-    .scrollIntoView({
-      behavior: "smooth",
-      block: "center"
-    });
-}
-
-function openTeamRegistration() {
-
-  if (!currentUser) {
-
-    showToast(
-      "CẦN ĐĂNG NHẬP",
-      "Bạn cần đăng nhập trước khi đăng ký team."
-    );
-
-    openLogin();
-
-    return;
-  }
-
-  closeModals();
-
-  document
-    .getElementById("teamModal")
-    .classList.add("show");
-
-  document
-    .getElementById("teamEmail")
-    .value =
-      currentUser.email || "";
-}
-
-function switchToRegister() {
-  openRegister();
-}
-
-function switchToLogin() {
-  openLogin();
-}
-
-
-// ==========================================================
-// PASSWORD
-// ==========================================================
+/* =========================================================
+   PASSWORD
+========================================================= */
 
 function togglePassword(
-  inputId,
+  id,
   button
-) {
-  const input =
-    document.getElementById(inputId);
+){
+  const input = $(id);
 
-  if (input.type === "password") {
+  if (input.type === "password"){
     input.type = "text";
     button.textContent = "🙈";
-  } else {
+  }else{
     input.type = "password";
-    button.textContent = "👁";
+    button.textContent = "👁️";
   }
 }
 
+/* =========================================================
+   REGISTER
+========================================================= */
 
-// ==========================================================
-// AUTH UI
-// ==========================================================
+async function register(event){
+  event.preventDefault();
 
-function updateAuthUI() {
+  const username =
+    $("registerUsername").value.trim();
 
-  const loginNav =
-    document.getElementById("loginNav");
+  const email =
+    $("registerEmail").value.trim();
 
-  const registerNav =
-    document.getElementById("registerNav");
+  const password =
+    $("registerPassword").value;
 
-  const accountMini =
-    document.getElementById("accountMini");
+  const passwordConfirm =
+    $("registerPasswordConfirm").value;
 
-  const accountSection =
-    document.getElementById("accountSection");
+  if (password !== passwordConfirm){
+    showToast(
+      "Tạo tài khoản thất bại",
+      "Mật khẩu nhập lại không khớp."
+    );
+    return;
+  }
 
-  if (!currentUser) {
+  const button = $("registerSubmit");
 
-    loginNav.style.display = "";
-    registerNav.style.display = "";
-    accountMini.style.display = "none";
-    accountSection.classList.remove("show");
+  button.disabled = true;
+  button.textContent = "ĐANG TẠO...";
+
+  try{
+
+    const data = await apiFetch(
+      "/api/auth/register",
+      {
+        method:"POST",
+        body:JSON.stringify({
+          username,
+          email,
+          password,
+          passwordConfirm
+        })
+      }
+    );
+
+    if (data.authenticated){
+      currentUser = data.user;
+
+      closeAllModals();
+      updateAccountUI();
+
+      showToast(
+        "Tạo tài khoản thành công",
+        "Tài khoản đã được tạo và bạn đã đăng nhập.",
+        true
+      );
+
+    }else{
+
+      closeModal("registerModal");
+
+      showToast(
+        "Tạo tài khoản thành công",
+        data.message ||
+        "Tài khoản đã được tạo. Bạn có thể đăng nhập.",
+        true
+      );
+
+      setTimeout(() => {
+        openModal("loginModal");
+      },500);
+    }
+
+    event.target.reset();
+
+  }catch(error){
+
+    showToast(
+      "Tạo tài khoản thất bại",
+      error.message ||
+      "Không thể tạo tài khoản."
+    );
+
+  }finally{
+
+    button.disabled = false;
+    button.textContent = "TẠO TÀI KHOẢN";
+  }
+}
+
+/* =========================================================
+   LOGIN
+========================================================= */
+
+async function login(event){
+  event.preventDefault();
+
+  const email =
+    $("loginEmail").value.trim();
+
+  const password =
+    $("loginPassword").value;
+
+  const button = $("loginSubmit");
+
+  button.disabled = true;
+  button.textContent = "ĐANG ĐĂNG NHẬP...";
+
+  try{
+
+    const data = await apiFetch(
+      "/api/auth/login",
+      {
+        method:"POST",
+        body:JSON.stringify({
+          email,
+          password
+        })
+      }
+    );
+
+    currentUser = data.user;
+
+    closeAllModals();
+    updateAccountUI();
+
+    showToast(
+      "Đăng nhập thành công",
+      `Chào mừng ${currentUser.username || currentUser.email}!`,
+      true
+    );
+
+    event.target.reset();
+
+  }catch(error){
+
+    showToast(
+      "Đăng nhập thất bại",
+      error.message ||
+      "Email hoặc mật khẩu không chính xác."
+    );
+
+  }finally{
+
+    button.disabled = false;
+    button.textContent = "ĐĂNG NHẬP";
+  }
+}
+
+/* =========================================================
+   LOGOUT
+========================================================= */
+
+async function logout(){
+
+  try{
+
+    const data = await apiFetch(
+      "/api/auth/logout",
+      {
+        method:"POST",
+        body:"{}"
+      }
+    );
+
+    currentUser = null;
+
+    closeAllModals();
+    updateAccountUI();
+
+    showToast(
+      "Đã đăng xuất",
+      data.message ||
+      "Bạn đã đăng xuất khỏi tài khoản.",
+      true
+    );
+
+  }catch(error){
+
+    showToast(
+      "Đăng xuất thất bại",
+      error.message
+    );
+  }
+}
+
+/* =========================================================
+   ACCOUNT UI
+========================================================= */
+
+function updateAccountUI(){
+
+  const button = $("accountButton");
+
+  if (!currentUser){
+
+    button.className = "account-btn";
+    button.innerHTML = "☰";
 
     return;
   }
 
-  loginNav.style.display = "none";
-  registerNav.style.display = "none";
-
-  accountMini.style.display = "flex";
-  accountSection.classList.add("show");
-
-  const username =
+  const name =
     currentUser.username ||
     currentUser.email ||
+    "U";
+
+  const letter =
+    name.charAt(0).toUpperCase();
+
+  button.className =
+    "account-btn logged";
+
+  button.innerHTML = `
+    <span class="avatar">
+      ${escapeHtml(letter)}
+    </span>
+    <span>
+      ${escapeHtml(
+        currentUser.username || "Tài khoản"
+      )}
+    </span>
+  `;
+
+  $("accountAvatar").textContent = letter;
+
+  $("accountName").textContent =
+    currentUser.username ||
     "Tài khoản";
 
-  const first =
-    username.charAt(0).toUpperCase();
+  $("accountEmail").textContent =
+    currentUser.email ||
+    "—";
 
-  document
-    .getElementById("miniAvatar")
-    .textContent = first;
-
-  document
-    .getElementById("miniName")
-    .textContent = username;
-
-  document
-    .getElementById("bigAvatar")
-    .textContent = first;
-
-  document
-    .getElementById("accountName")
-    .textContent = username;
-
-  document
-    .getElementById("accountEmail")
-    .textContent =
-      currentUser.email || "-";
-
-  document
-    .getElementById("accountBalance")
-    .textContent =
-      formatMoney(
-        currentUser.balance || 0
-      );
+  $("accountBalance").textContent =
+    formatMoney(
+      Number(currentUser.balance || 0)
+    );
 }
 
-function formatMoney(value) {
+function openAccountOrLogin(){
 
-  const number =
-    Number(value || 0);
+  if (currentUser){
+    openModal("accountModal");
+  }else{
+    openModal("loginModal");
+  }
+}
+
+/* =========================================================
+   MONEY
+========================================================= */
+
+function formatMoney(value){
 
   return new Intl.NumberFormat(
     "vi-VN"
-  ).format(number) + " ₫";
+  ).format(
+    Number(value || 0)
+  ) + "đ";
 }
 
+/* =========================================================
+   TOURNAMENT
+========================================================= */
 
-// ==========================================================
-// LOGIN
-// ==========================================================
+async function loadTournament(){
 
-document
-  .getElementById("loginForm")
-  .addEventListener(
-    "submit",
-    async event => {
-
-      event.preventDefault();
-
-      const button =
-        document.getElementById(
-          "loginButton"
-        );
-
-      button.disabled = true;
-      button.textContent = "ĐANG XỬ LÝ...";
-
-      try {
-
-        const data =
-          await api(
-            "/api/auth/login",
-            {
-              method: "POST",
-
-              body: JSON.stringify({
-                email:
-                  document
-                    .getElementById(
-                      "loginEmail"
-                    )
-                    .value,
-
-                password:
-                  document
-                    .getElementById(
-                      "loginPassword"
-                    )
-                    .value
-              })
-            }
-          );
-
-        currentUser =
-          data.user;
-
-        updateAuthUI();
-        closeModals();
-
-        document
-          .getElementById(
-            "loginForm"
-          )
-          .reset();
-
-        showToast(
-          "Đăng nhập thành công",
-          `Chào mừng ${currentUser.username || currentUser.email}!`,
-          "success"
-        );
-
-        setTimeout(() => {
-          document
-            .getElementById(
-              "accountSection"
-            )
-            .scrollIntoView({
-              behavior: "smooth",
-              block: "center"
-            });
-        }, 250);
-
-      } catch (error) {
-
-        showToast(
-          "ĐĂNG NHẬP THẤT BẠI",
-          error.message
-        );
-
-      } finally {
-
-        button.disabled = false;
-        button.textContent = "ĐĂNG NHẬP";
-
-      }
-    }
-  );
-
-
-// ==========================================================
-// REGISTER
-// ==========================================================
-
-document
-  .getElementById("registerForm")
-  .addEventListener(
-    "submit",
-    async event => {
-
-      event.preventDefault();
-
-      const password =
-        document
-          .getElementById(
-            "registerPassword"
-          )
-          .value;
-
-      const confirm =
-        document
-          .getElementById(
-            "registerPasswordConfirm"
-          )
-          .value;
-
-      if (password !== confirm) {
-
-        showToast(
-          "TẠO TÀI KHOẢN THẤT BẠI",
-          "Mật khẩu nhập lại không khớp."
-        );
-
-        return;
-      }
-
-      const button =
-        document.getElementById(
-          "registerButton"
-        );
-
-      button.disabled = true;
-      button.textContent =
-        "ĐANG TẠO TÀI KHOẢN...";
-
-      try {
-
-        const data =
-          await api(
-            "/api/auth/register",
-            {
-              method: "POST",
-
-              body: JSON.stringify({
-                username:
-                  document
-                    .getElementById(
-                      "registerUsername"
-                    )
-                    .value,
-
-                email:
-                  document
-                    .getElementById(
-                      "registerEmail"
-                    )
-                    .value,
-
-                password,
-
-                passwordConfirm:
-                  confirm
-              })
-            }
-          );
-
-        currentUser =
-          data.user;
-
-        updateAuthUI();
-        closeModals();
-
-        document
-          .getElementById(
-            "registerForm"
-          )
-          .reset();
-
-        showToast(
-          "TẠO TÀI KHOẢN THÀNH CÔNG",
-          "Tài khoản đã được tạo và bạn đã được đăng nhập.",
-          "success"
-        );
-
-        setTimeout(() => {
-          document
-            .getElementById(
-              "accountSection"
-            )
-            .scrollIntoView({
-              behavior: "smooth",
-              block: "center"
-            });
-        }, 250);
-
-      } catch (error) {
-
-        showToast(
-          "TẠO TÀI KHOẢN THẤT BẠI",
-          error.message
-        );
-
-      } finally {
-
-        button.disabled = false;
-        button.textContent =
-          "TẠO TÀI KHOẢN";
-
-      }
-    }
-  );
-
-
-// ==========================================================
-// LOGOUT
-// ==========================================================
-
-async function logout() {
-
-  try {
-
-    await api(
-      "/api/auth/logout",
-      {
-        method: "POST",
-        body: "{}"
-      }
-    );
-
-  } catch {
-    // Cookie vẫn được clear nếu API phản hồi lỗi.
-  }
-
-  currentUser = null;
-
-  updateAuthUI();
-
-  showToast(
-    "ĐÃ ĐĂNG XUẤT",
-    "Bạn đã đăng xuất khỏi tài khoản.",
-    "success"
-  );
-}
-
-
-// ==========================================================
-// TEAM
-// ==========================================================
-
-document
-  .getElementById("teamForm")
-  .addEventListener(
-    "submit",
-    async event => {
-
-      event.preventDefault();
-
-      if (!currentUser) {
-
-        closeModals();
-        openLogin();
-
-        return;
-      }
-
-      const button =
-        document.getElementById(
-          "teamButton"
-        );
-
-      button.disabled = true;
-      button.textContent =
-        "ĐANG GỬI ĐĂNG KÝ...";
-
-      try {
-
-        const data =
-          await api(
-            "/api/teams/register",
-            {
-              method: "POST",
-
-              body: JSON.stringify({
-
-                tournamentId:
-                  document
-                    .getElementById(
-                      "teamTournamentId"
-                    )
-                    .value,
-
-                teamName:
-                  document
-                    .getElementById(
-                      "teamName"
-                    )
-                    .value,
-
-                logoUrl:
-                  document
-                    .getElementById(
-                      "teamLogo"
-                    )
-                    .value,
-
-                teamEmail:
-                  document
-                    .getElementById(
-                      "teamEmail"
-                    )
-                    .value
-
-              })
-            }
-          );
-
-        closeModals();
-
-        document
-          .getElementById(
-            "teamForm"
-          )
-          .reset();
-
-        showToast(
-          "ĐĂNG KÝ TEAM THÀNH CÔNG",
-          data.message ||
-            "Vui lòng hoàn tất thanh toán.",
-          "success"
-        );
-
-      } catch (error) {
-
-        showToast(
-          "ĐĂNG KÝ TEAM THẤT BẠI",
-          error.message
-        );
-
-      } finally {
-
-        button.disabled = false;
-        button.textContent =
-          "XÁC NHẬN ĐĂNG KÝ";
-
-      }
-    }
-  );
-
-
-// ==========================================================
-// LOAD TOURNAMENTS
-// ==========================================================
-
-async function loadTournaments() {
-
-  try {
+  try{
 
     const data =
-      await api(
-        "/api/tournaments"
+      await apiFetch(
+        "/api/tournaments",
+        {
+          method:"GET"
+        }
       );
 
-    if (
-      Array.isArray(data.tournaments) &&
-      data.tournaments.length
-    ) {
+    const t =
+      data.tournament;
 
-      const tournament =
-        data.tournaments[0];
+    if (!t) return;
 
-      currentTournament = {
-        ...currentTournament,
-        ...tournament
-      };
+    $("tournamentName").textContent =
+      t.name;
 
-      document
-        .getElementById(
-          "teamTournamentId"
-        )
-        .value =
-          tournament.id ?? 1;
+    $("tournamentDescription").textContent =
+      t.description;
 
-      document
-        .getElementById(
-          "tournamentName"
-        )
-        .textContent =
-          tournament.name ||
-          currentTournament.name;
+    const open =
+      String(t.status).toUpperCase()
+      === "OPEN";
 
-      document
-        .getElementById(
-          "tournamentDescription"
-        )
-        .textContent =
-          tournament.description ||
-          currentTournament.description;
-    }
+    $("tournamentStatus").textContent =
+      open
+        ? "CÒN SLOT"
+        : "ĐÃ ĐÓNG";
 
-  } catch {
+    $("slotText").textContent =
+      open
+        ? "CÒN SLOT"
+        : "ĐÃ ĐÓNG";
+
+  }catch{
     /*
-     * Giữ card mặc định.
-     * Không làm hỏng toàn bộ website
-     * nếu D1 chưa có tournaments.
-     */
+      Dùng dữ liệu giao diện mặc định.
+    */
   }
 }
 
+function openTournament(){
 
-// ==========================================================
-// LOAD RANKING
-// ==========================================================
+  if (!currentUser){
 
-async function loadRanking() {
-
-  const body =
-    document.getElementById(
-      "rankingBody"
+    showToast(
+      "Cần đăng nhập",
+      "Bạn hãy đăng nhập trước khi đăng ký giải."
     );
 
-  try {
+    openModal("loginModal");
+    return;
+  }
+
+  $("teamEmail").value =
+    currentUser.email || "";
+
+  openModal("tournamentModal");
+}
+
+/* =========================================================
+   TEAM REGISTER
+========================================================= */
+
+async function registerTeam(event){
+
+  event.preventDefault();
+
+  if (!currentUser){
+
+    showToast(
+      "Cần đăng nhập",
+      "Bạn hãy đăng nhập trước."
+    );
+
+    closeModal("tournamentModal");
+    openModal("loginModal");
+    return;
+  }
+
+  const button =
+    $("teamSubmit");
+
+  button.disabled = true;
+  button.textContent =
+    "ĐANG ĐĂNG KÝ...";
+
+  try{
 
     const data =
-      await api(
-        "/api/ranking"
+      await apiFetch(
+        "/api/teams/register",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            teamName:
+              $("teamName").value.trim(),
+
+            teamEmail:
+              $("teamEmail").value.trim(),
+
+            logo:
+              $("teamLogo").value.trim()
+          })
+        }
       );
 
-    const rows =
-      Array.isArray(data.ranking)
-        ? data.ranking
-        : [];
+    closeModal("tournamentModal");
 
-    if (!rows.length) {
+    showToast(
+      "Đăng ký team thành công",
+      data.message ||
+      "Team đã được ghi nhận.",
+      true
+    );
 
-      body.innerHTML = `
+    event.target.reset();
+
+    await loadRanking();
+
+  }catch(error){
+
+    showToast(
+      "Đăng ký team thất bại",
+      error.message ||
+      "Không thể đăng ký team."
+    );
+
+  }finally{
+
+    button.disabled = false;
+    button.textContent =
+      "ĐĂNG KÝ TEAM";
+  }
+}
+
+/* =========================================================
+   RANKING
+========================================================= */
+
+async function loadRanking(){
+
+  try{
+
+    const data =
+      await apiFetch(
+        "/api/ranking",
+        {
+          method:"GET"
+        }
+      );
+
+    const ranking =
+      data.ranking || [];
+
+    if (!ranking.length){
+
+      $("ranking").innerHTML = `
         <div class="empty-ranking">
           <strong>Chưa có team nào</strong>
-          Bảng xếp hạng sẽ xuất hiện khi giải đấu bắt đầu.
+          Hãy trở thành đội đầu tiên xuất hiện
+          trên bảng xếp hạng.
         </div>
       `;
 
       return;
     }
 
-    body.innerHTML =
-      rows.map(
-        (row, index) => `
+    $("ranking").innerHTML =
+      ranking.map(team => `
+        <div class="rank-row">
 
-          <div class="rank-row">
-
-            <div class="rank-number">
-              ${escapeHTML(
-                row.position ?? index + 1
-              )}
-            </div>
-
-            <div>
-              <strong>
-                ${escapeHTML(
-                  row.team_name || "TEAM"
-                )}
-              </strong>
-            </div>
-
-            <div>
-              ${escapeHTML(
-                row.points ?? 0
-              )}
-            </div>
-
-            <div>
-              ${escapeHTML(
-                row.wins ?? 0
-              )}
-            </div>
-
+          <div class="rank-number">
+            #${team.rank}
           </div>
 
-        `
-      ).join("");
+          <div class="rank-team">
+            ${escapeHtml(team.name)}
+          </div>
 
-  } catch {
+          <div class="rank-points">
+            ${team.points} điểm
+          </div>
 
-    body.innerHTML = `
+        </div>
+      `).join("");
+
+  }catch{
+
+    $("ranking").innerHTML = `
       <div class="empty-ranking">
         <strong>Chưa có team nào</strong>
-        Bảng xếp hạng sẽ xuất hiện khi giải đấu bắt đầu.
+        Hãy trở thành đội đầu tiên xuất hiện
+        trên bảng xếp hạng.
       </div>
     `;
   }
 }
 
+/* =========================================================
+   CHECK SESSION
+========================================================= */
 
-// ==========================================================
-// INITIAL AUTH
-// ==========================================================
+async function checkSession(){
 
-async function loadCurrentUser() {
-
-  try {
+  try{
 
     const data =
-      await api(
-        "/api/auth/me"
+      await apiFetch(
+        "/api/auth/me",
+        {
+          method:"GET"
+        }
       );
 
     if (
       data.authenticated &&
       data.user
-    ) {
+    ){
 
       currentUser =
         data.user;
 
-    } else {
+      updateAccountUI();
+
+    }else{
 
       currentUser = null;
-
+      updateAccountUI();
     }
 
-    updateAuthUI();
-
-  } catch {
+  }catch{
 
     currentUser = null;
-    updateAuthUI();
-
+    updateAccountUI();
   }
 }
 
+/* =========================================================
+   CLOSE MODAL WHEN CLICK OUTSIDE
+========================================================= */
 
-// ==========================================================
-// SCROLL
-// ==========================================================
+document.querySelectorAll(".overlay")
+.forEach(overlay => {
 
-function scrollToTournament() {
+  overlay.addEventListener(
+    "click",
+    event => {
 
-  document
-    .getElementById(
-      "tournamentSection"
-    )
-    .scrollIntoView({
-      behavior: "smooth"
-    });
-}
-
-
-// ==========================================================
-// CLOSE MODAL OUTSIDE
-// ==========================================================
-
-document
-  .querySelectorAll(".modal-backdrop")
-  .forEach(backdrop => {
-
-    backdrop.addEventListener(
-      "click",
-      event => {
-
-        if (
-          event.target === backdrop
-        ) {
-          closeModals();
-        }
-
+      if (
+        event.target === overlay
+      ){
+        closeModal(
+          overlay.id
+        );
       }
-    );
 
-  });
+    }
+  );
+});
+
+/* =========================================================
+   ESC
+========================================================= */
 
 document.addEventListener(
   "keydown",
   event => {
 
-    if (event.key === "Escape") {
-      closeModals();
+    if (event.key === "Escape"){
+      closeAllModals();
     }
 
   }
 );
 
+/* =========================================================
+   INIT
+========================================================= */
 
-// ==========================================================
-// START
-// ==========================================================
+(async function(){
 
-(async function init() {
-
-  updateAuthUI();
-
-  await Promise.all([
-    loadCurrentUser(),
-    loadTournaments(),
-    loadRanking()
-  ]);
+  await checkSession();
+  await loadTournament();
+  await loadRanking();
 
 })();
 </script>
