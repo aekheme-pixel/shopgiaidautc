@@ -3,7 +3,7 @@ const SITE_NAME_DEFAULT = "GIẢI ĐẤU TỬ CHIẾN – MÙA 1";
 const SESSION_COOKIE = "vtc_session";
 const SESSION_DAYS = 7;
 
-const PBKDF2_ITERATIONS = 120000;
+const PBKDF2_ITERATIONS = 100000;
 const PASSWORD_MIN = 8;
 
 const encoder = new TextEncoder();
@@ -124,7 +124,7 @@ function base64UrlDecode(value) {
 // Không dùng password_salt.
 // Salt được đóng gói bên trong password_hash:
 //
-// pbkdf2$120000$SALT$HASH
+// pbkdf2$100000$SALT$HASH
 // ============================================================
 
 async function hashPassword(password) {
