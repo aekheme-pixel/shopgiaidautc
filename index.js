@@ -539,9 +539,9 @@ async function handleRegister(request, env) {
   }
 
   const session = await createSession(
-    env.DB,
-    user.userId
-  );
+  env.DB,
+  user
+);
 
   return json(
     {
@@ -622,10 +622,10 @@ async function handleLogin(request, env) {
   }
 
   const session =
-    await createSession(
-      env.DB,
-      user.userId
-    );
+  await createSession(
+    env.DB,
+    user
+  );
 
   return json(
     {
@@ -997,14 +997,10 @@ async function verifyStoredPassword(
    SESSION
 ========================================================= */
 
-async function createSession(
-  db,
-  userId
-) {
-  const token =
-    bytesToB64Url(
-      randomBytes(32)
-    );
+async function createSession(db, user) {
+  const token = bytesToB64Url(
+    randomBytes(32)
+  );
 
   const tokenHash =
     await sha256Hex(token);
@@ -1012,8 +1008,7 @@ async function createSession(
   const now = Date.now();
 
   const createdAt =
-    new Date(now)
-      .toISOString();
+    new Date(now).toISOString();
 
   const expiresAt =
     new Date(
@@ -1021,19 +1016,246 @@ async function createSession(
       SESSION_TTL_SECONDS * 1000
     ).toISOString();
 
-  await db
-    .prepare(
-      `INSERT INTO app_sessions
-       (user_id, token_hash, expires_at, created_at)
-       VALUES (?, ?, ?, ?)`
-    )
-    .bind(
-      String(userId),
-      tokenHash,
-      expiresAt,
-      createdAt
-    )
-    .run();
+  /*
+   * Đọc schema app_sessions THỰC TẾ
+   * đang có trong D1.
+   *
+   * Không giả định bảng phải có
+   * đúng schema mà Worker tự tạo.
+   */
+  const schema =
+    await getAppSessionsSchema(db);
+
+  if (!schema.length) {
+    throw new Error(
+      "Không tìm thấy bảng app_sessions trong D1."
+    );
+  }
+
+  const values = {};
+
+  /*
+   * TOKEN HASH
+   */
+  const tokenHashCol =
+    findColumn(schema, [
+      "token_hash",
+      "tokenHash",
+      "session_token_hash",
+      "sessionTokenHash",
+    ]);
+
+  if (tokenHashCol) {
+    values[tokenHashCol] =
+      tokenHash;
+  }
+
+  /*
+   * USER ID
+   */
+  const userIdCol =
+    findColumn(schema, [
+      "user_id",
+      "userId",
+      "userid",
+      "account_id",
+      "accountId",
+    ]);
+
+  if (userIdCol) {
+    values[userIdCol] =
+      String(user.userId);
+  }
+
+  /*
+   * EMAIL
+   *
+   * Đây chính là phần sửa lỗi:
+   *
+   * app_sessions.email NOT NULL
+   */
+  const emailCol =
+    findColumn(schema, [
+      "email",
+      "mail",
+    ]);
+
+  if (emailCol) {
+    values[emailCol] =
+      String(user.email || "");
+  }
+
+  /*
+   * EXPIRATION
+   */
+  const expiresCol =
+    findColumn(schema, [
+      "expires_at",
+      "expiresAt",
+      "expiry",
+      "expired_at",
+    ]);
+
+  if (expiresCol) {
+    values[expiresCol] =
+      expiresAt;
+  }
+
+  /*
+   * CREATED AT
+   */
+  const createdCol =
+    findColumn(schema, [
+      "created_at",
+      "createdAt",
+      "created",
+    ]);
+
+  if (createdCol) {
+    values[createdCol] =
+      createdAt;
+  }
+
+  /*
+   * Nếu schema có token dạng plain
+   * thì vẫn hỗ trợ.
+   */
+  const tokenCol =
+    findColumn(schema, [
+      "token",
+      "session_token",
+      "sessionToken",
+    ]);
+
+  if (
+    tokenCol &&
+    values[tokenCol] === undefined
+  ) {
+    values[tokenCol] =
+      token;
+  }
+
+  /*
+   * Một số schema cũ dùng session_id.
+   */
+  const sessionIdCol =
+    findColumn(schema, [
+      "session_id",
+      "sessionId",
+    ]);
+
+  if (
+    sessionIdCol &&
+    values[sessionIdCol] === undefined
+  ) {
+    const info =
+      schema.find(
+        column =>
+          column.name ===
+          sessionIdCol
+      );
+
+    if (
+      info &&
+      info.notnull &&
+      info.dflt_value == null &&
+      info.pk === 0
+    ) {
+      values[sessionIdCol] =
+        randomId();
+    }
+  }
+
+  /*
+   * Kiểm tra toàn bộ NOT NULL column
+   * của app_sessions.
+   *
+   * Những column có DEFAULT hoặc PK
+   * tự tăng thì SQLite tự xử lý.
+   */
+  const missing =
+    schema.filter(column => {
+      if (!column.notnull) {
+        return false;
+      }
+
+      if (
+        column.dflt_value != null
+      ) {
+        return false;
+      }
+
+      if (column.pk) {
+        return false;
+      }
+
+      return (
+        values[column.name] ===
+        undefined
+      );
+    });
+
+  if (missing.length) {
+    throw new Error(
+      "Schema app_sessions còn cột bắt buộc chưa thể xử lý: " +
+      missing
+        .map(
+          column => column.name
+        )
+        .join(", ")
+    );
+  }
+
+  /*
+   * Nếu schema không có token_hash
+   * và cũng không có token,
+   * session không thể hoạt động an toàn.
+   */
+  if (
+    !tokenHashCol &&
+    !tokenCol
+  ) {
+    throw new Error(
+      "Bảng app_sessions không có cột token_hash hoặc token."
+    );
+  }
+
+  const columns =
+    Object.keys(values);
+
+  const placeholders =
+    columns
+      .map(() => "?")
+      .join(", ");
+
+  const sql =
+    `INSERT INTO app_sessions (` +
+    columns
+      .map(qi)
+      .join(", ") +
+    `) VALUES (${placeholders})`;
+
+  try {
+    await db
+      .prepare(sql)
+      .bind(
+        ...columns.map(
+          column =>
+            values[column]
+        )
+      )
+      .run();
+  } catch (error) {
+    console.error(
+      "CREATE SESSION ERROR:",
+      error
+    );
+
+    throw new Error(
+      "Không thể tạo phiên đăng nhập: " +
+      safeError(error)
+    );
+  }
 
   return {
     cookie:
@@ -1042,37 +1264,176 @@ async function createSession(
 }
 
 
-async function getCurrentUser(
-  request,
-  db
-) {
-  const token =
-    getCookie(
-      request,
-      SESSION_COOKIE
-    );
+async function getCurrentUser(request, db) {
+  const token = getCookie(request, SESSION_COOKIE);
 
   if (!token) {
     return null;
   }
 
-  const tokenHash =
-    await sha256Hex(token);
+  const tokenHash = await sha256Hex(token);
 
-  const session =
-    await db
-      .prepare(
-        `SELECT user_id, expires_at
-         FROM app_sessions
-         WHERE token_hash = ?
-         LIMIT 1`
-      )
-      .bind(tokenHash)
-      .first();
+  const sessionSchema =
+    await getAppSessionsSchema(db);
+
+  if (!sessionSchema.length) {
+    return null;
+  }
+
+  const tokenHashCol = findColumn(sessionSchema, [
+    "token_hash",
+    "tokenHash",
+    "session_token_hash",
+    "sessionTokenHash",
+  ]);
+
+  const tokenCol = findColumn(sessionSchema, [
+    "token",
+    "session_token",
+    "sessionToken",
+  ]);
+
+  const userIdCol = findColumn(sessionSchema, [
+    "user_id",
+    "userId",
+    "userid",
+    "account_id",
+    "accountId",
+  ]);
+
+  const emailCol = findColumn(sessionSchema, [
+    "email",
+    "mail",
+  ]);
+
+  const expiresCol = findColumn(sessionSchema, [
+    "expires_at",
+    "expiresAt",
+    "expiry",
+    "expired_at",
+  ]);
+
+  let whereSql = "";
+  let whereValue = "";
+
+  if (tokenHashCol) {
+    whereSql = `${qi(tokenHashCol)} = ?`;
+    whereValue = tokenHash;
+  } else if (tokenCol) {
+    whereSql = `${qi(tokenCol)} = ?`;
+    whereValue = token;
+  } else {
+    return null;
+  }
+
+  const session = await db
+    .prepare(
+      `SELECT *
+       FROM app_sessions
+       WHERE ${whereSql}
+       LIMIT 1`
+    )
+    .bind(whereValue)
+    .first();
 
   if (!session) {
     return null;
   }
+
+  if (expiresCol) {
+    const expires = Date.parse(
+      String(session[expiresCol] || "")
+    );
+
+    if (
+      !Number.isFinite(expires) ||
+      expires <= Date.now()
+    ) {
+      await db
+        .prepare(
+          `DELETE FROM app_sessions
+           WHERE ${whereSql}`
+        )
+        .bind(whereValue)
+        .run()
+        .catch(() => {});
+
+      return null;
+    }
+  }
+
+  const userSchema =
+    await getUsersSchema(db);
+
+  const userIdUserCol =
+    findColumn(userSchema, [
+      "id",
+      "user_id",
+      "userid",
+    ]);
+
+  let row = null;
+
+  /*
+   * Ưu tiên tìm user bằng user_id
+   */
+  if (
+    userIdCol &&
+    userIdUserCol &&
+    session[userIdCol] != null
+  ) {
+    row = await db
+      .prepare(
+        `SELECT *
+         FROM users
+         WHERE ${qi(userIdUserCol)} = ?
+         LIMIT 1`
+      )
+      .bind(
+        String(session[userIdCol])
+      )
+      .first();
+  }
+
+  /*
+   * Nếu không tìm được thì tìm bằng email
+   */
+  if (
+    !row &&
+    emailCol &&
+    session[emailCol]
+  ) {
+    const userEmailCol =
+      findColumn(userSchema, [
+        "email",
+        "mail",
+      ]);
+
+    if (userEmailCol) {
+      row = await db
+        .prepare(
+          `SELECT *
+           FROM users
+           WHERE lower(${qi(userEmailCol)}) =
+                 lower(?)
+           LIMIT 1`
+        )
+        .bind(
+          String(session[emailCol])
+        )
+        .first();
+    }
+  }
+
+  if (!row) {
+    return null;
+  }
+
+  return normalizeUserRow(
+    row,
+    userSchema
+  );
+}
 
   const expires =
     Date.parse(
@@ -1984,6 +2345,26 @@ async function getUsersSchema(db) {
       .all();
 
   return result.results || [];
+}
+
+
+async function getAppSessionsSchema(db) {
+  const result =
+    await db
+      .prepare(
+        `PRAGMA table_info(app_sessions)`
+      )
+      .all();
+
+  return result.results || [];
+}
+
+
+async function getTableSql(
+  db,
+  tableName
+) {
+  // ...
 }
 
 
