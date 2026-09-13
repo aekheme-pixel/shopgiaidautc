@@ -1,6 +1,6 @@
 /**
  * =========================================================
- * GIẢI ĐẤU TỬ CHIẾN – MÙA 1
+ * GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1
  *
  * Cloudflare Worker
  * Cloudflare D1
@@ -31,15 +31,11 @@ const PBKDF2_ITERATIONS = 100000;
 const SESSION_TTL_SECONDS =
   60 * 60 * 24 * 30;
 
-const SESSION_COOKIE =
-  "vtc_session";
+const SESSION_COOKIE = "vtc_session";
 
 const JSON_HEADERS = {
-  "content-type":
-    "application/json; charset=utf-8",
-
-  "cache-control":
-    "no-store",
+  "content-type": "application/json; charset=utf-8",
+  "cache-control": "no-store",
 };
 
 /* =========================================================
@@ -48,43 +44,25 @@ const JSON_HEADERS = {
 
 export default {
   async fetch(request, env) {
-    const url =
-      new URL(request.url);
+    const url = new URL(request.url);
 
     try {
-      if (
-        url.pathname.startsWith("/api/")
-      ) {
-        return await api(
-          request,
-          env,
-          url
-        );
+      if (url.pathname.startsWith("/api/")) {
+        return await api(request, env, url);
       }
 
       if (env.ASSETS) {
-        return env.ASSETS.fetch(
-          request
-        );
+        return env.ASSETS.fetch(request);
       }
 
       return new Response(
         "Assets chưa được cấu hình.",
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     } catch (error) {
-      console.error(
-        "WORKER ERROR:",
-        error
-      );
+      console.error("WORKER ERROR:", error);
 
-      if (
-        url.pathname.startsWith(
-          "/api/"
-        )
-      ) {
+      if (url.pathname.startsWith("/api/")) {
         return json(
           {
             ok: false,
@@ -98,9 +76,7 @@ export default {
 
       return new Response(
         "Internal Server Error",
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
   },
@@ -110,34 +86,26 @@ export default {
    API ROUTER
 ========================================================= */
 
-async function api(
-  request,
-  env,
-  url
-) {
-  const method =
-    request.method.toUpperCase();
+async function api(request, env, url) {
+  const method = request.method.toUpperCase();
 
   if (method === "OPTIONS") {
     return new Response(null, {
       status: 204,
-      headers:
-        corsHeaders(request),
+      headers: corsHeaders(request),
     });
   }
 
   if (
-    url.pathname ===
-      "/api/health" &&
+    url.pathname === "/api/health" &&
     method === "GET"
   ) {
     return json(
       {
         ok: true,
-
         site:
           env.SITE_NAME ||
-          "GIẢI ĐẤU TỬ CHIẾN – MÙA 1",
+          "GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1",
       },
       200,
       null,
@@ -146,91 +114,59 @@ async function api(
   }
 
   if (
-    url.pathname ===
-      "/api/auth/register" &&
+    url.pathname === "/api/auth/register" &&
     method === "POST"
   ) {
-    return handleRegister(
-      request,
-      env
-    );
+    return handleRegister(request, env);
   }
 
   if (
-    url.pathname ===
-      "/api/auth/login" &&
+    url.pathname === "/api/auth/login" &&
     method === "POST"
   ) {
-    return handleLogin(
-      request,
-      env
-    );
+    return handleLogin(request, env);
   }
 
   if (
-    url.pathname ===
-      "/api/auth/logout" &&
+    url.pathname === "/api/auth/logout" &&
     method === "POST"
   ) {
-    return handleLogout(
-      request,
-      env
-    );
+    return handleLogout(request, env);
   }
 
   if (
-    url.pathname ===
-      "/api/auth/me" &&
+    url.pathname === "/api/auth/me" &&
     method === "GET"
   ) {
-    return handleMe(
-      request,
-      env
-    );
+    return handleMe(request, env);
   }
 
   if (
-    url.pathname ===
-      "/api/tournament" &&
+    url.pathname === "/api/tournament" &&
     method === "GET"
   ) {
-    return handleTournament(
-      request,
-      env
-    );
+    return handleTournament(request, env);
   }
 
   if (
-    url.pathname ===
-      "/api/team/register" &&
+    url.pathname === "/api/team/register" &&
     method === "POST"
   ) {
-    return handleTeamRegister(
-      request,
-      env
-    );
+    return handleTeamRegister(request, env);
   }
 
   if (
-    url.pathname ===
-      "/api/ranking" &&
+    url.pathname === "/api/ranking" &&
     method === "GET"
   ) {
-    return handleRanking(
-      request,
-      env
-    );
+    return handleRanking(request, env);
   }
 
   if (
-    url.pathname ===
-      "/api/payment/webhook" &&
+    url.pathname === "/api/payment/webhook" &&
     method === "POST"
   ) {
-    return handlePaymentWebhook(
-      request,
-      env
-    );
+    return handlePaymentWebhook(request, env);
   }
 
   return json(
@@ -248,16 +184,12 @@ async function api(
    REGISTER
 ========================================================= */
 
-async function handleRegister(
-  request,
-  env
-) {
+async function handleRegister(request, env) {
   if (!env.DB) {
     return json(
       {
         ok: false,
-        error:
-          "D1 DB chưa được cấu hình.",
+        error: "D1 DB chưa được cấu hình.",
       },
       500,
       null,
@@ -265,63 +197,30 @@ async function handleRegister(
     );
   }
 
-  const data =
-    await readJson(request);
+  const data = await readJson(request);
 
-  const username =
-    normalizeUsername(
-      data.username ??
-        data.accountName ??
-        data.userName
-    );
+  const email = normalizeEmail(data.email);
 
-  const email =
-    normalizeEmail(
-      data.email
-    );
+  const password = String(
+    data.password || ""
+  );
 
-  const password =
-    String(
-      data.password || ""
-    );
-
-  const confirmPassword =
-    String(
-      data.confirmPassword ??
-        data.passwordConfirm ??
-        data.confirm ??
-        ""
-    );
+  const confirmPassword = String(
+    data.confirmPassword ??
+      data.passwordConfirm ??
+      data.confirm ??
+      ""
+  );
 
   /* -------------------------------------------------------
-     Validate username
-  ------------------------------------------------------- */
-
-  if (
-    !isUsername(username)
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Tên tài khoản phải từ 3–30 ký tự, chỉ gồm chữ, số, dấu gạch dưới.",
-      },
-      400,
-      null,
-      request
-    );
-  }
-
-  /* -------------------------------------------------------
-     Validate email
+     EMAIL
   ------------------------------------------------------- */
 
   if (!isEmail(email)) {
     return json(
       {
         ok: false,
-        error:
-          "Email không hợp lệ.",
+        error: "Email không hợp lệ.",
       },
       400,
       null,
@@ -330,12 +229,10 @@ async function handleRegister(
   }
 
   /* -------------------------------------------------------
-     Validate password
+     PASSWORD
   ------------------------------------------------------- */
 
-  if (
-    password.length < 6
-  ) {
+  if (password.length < 6) {
     return json(
       {
         ok: false,
@@ -348,10 +245,7 @@ async function handleRegister(
     );
   }
 
-  if (
-    password !==
-    confirmPassword
-  ) {
+  if (password !== confirmPassword) {
     return json(
       {
         ok: false,
@@ -365,47 +259,18 @@ async function handleRegister(
   }
 
   /* -------------------------------------------------------
-     Check username
+     CHECK EMAIL
   ------------------------------------------------------- */
 
-  const usernameExists =
-    await env.DB
-      .prepare(
-        `SELECT id
-         FROM users
-         WHERE lower(username) = lower(?)
-         LIMIT 1`
-      )
-      .bind(username)
-      .first();
-
-  if (usernameExists) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Tên tài khoản này đã tồn tại.",
-      },
-      409,
-      null,
-      request
-    );
-  }
-
-  /* -------------------------------------------------------
-     Check email
-  ------------------------------------------------------- */
-
-  const emailExists =
-    await env.DB
-      .prepare(
-        `SELECT id
-         FROM users
-         WHERE lower(email) = lower(?)
-         LIMIT 1`
-      )
-      .bind(email)
-      .first();
+  const emailExists = await env.DB
+    .prepare(
+      `SELECT id
+       FROM users
+       WHERE lower(email) = lower(?)
+       LIMIT 1`
+    )
+    .bind(email)
+    .first();
 
   if (emailExists) {
     return json(
@@ -421,18 +286,16 @@ async function handleRegister(
   }
 
   /* -------------------------------------------------------
-     Password hash
+     PASSWORD HASH
   ------------------------------------------------------- */
 
-  const salt =
-    randomBytes(16);
+  const salt = randomBytes(16);
 
-  const hash =
-    await hashPassword(
-      password,
-      salt,
-      PBKDF2_ITERATIONS
-    );
+  const hash = await hashPassword(
+    password,
+    salt,
+    PBKDF2_ITERATIONS
+  );
 
   const passwordHash =
     bytesToB64Url(hash);
@@ -440,44 +303,43 @@ async function handleRegister(
   const passwordSalt =
     bytesToB64Url(salt);
 
-  /* -------------------------------------------------------
-     Role
-  ------------------------------------------------------- */
+  /*
+   * Tài khoản người chơi:
+   * PLAYER
+   *
+   * Không dùng USER.
+   */
 
-  const role =
-    chooseDefaultRole();
+  const role = "PLAYER";
 
   /* -------------------------------------------------------
-     INSERT
+     INSERT USER
   ------------------------------------------------------- */
 
   let result;
 
   try {
-    result =
-      await env.DB
-        .prepare(
-          `INSERT INTO users
-           (
-             username,
-             email,
-             password_hash,
-             password_salt,
-             role,
-             balance,
-             created_at
-           )
-           VALUES (?, ?, ?, ?, ?, 0, ?)`
-        )
-        .bind(
-          username,
-          email,
-          passwordHash,
-          passwordSalt,
-          role,
-          new Date().toISOString()
-        )
-        .run();
+    result = await env.DB
+      .prepare(
+        `INSERT INTO users
+         (
+           email,
+           password_hash,
+           password_salt,
+           role,
+           balance,
+           created_at
+         )
+         VALUES (?, ?, ?, ?, 0, ?)`
+      )
+      .bind(
+        email,
+        passwordHash,
+        passwordSalt,
+        role,
+        new Date().toISOString()
+      )
+      .run();
   } catch (error) {
     console.error(
       "REGISTER ERROR:",
@@ -497,11 +359,10 @@ async function handleRegister(
     );
   }
 
-  const user =
-    await findUserById(
-      env.DB,
-      result.meta?.last_row_id
-    );
+  const user = await findUserById(
+    env.DB,
+    result.meta?.last_row_id
+  );
 
   if (!user) {
     return json(
@@ -524,21 +385,25 @@ async function handleRegister(
     "Tạo tài khoản mới"
   );
 
-  const session =
-    await createSession(
-      env.DB,
-      user
-    );
+  /*
+   * Đăng ký xong tạo session luôn.
+   *
+   * Frontend có thể chuyển thẳng
+   * sang trạng thái tài khoản.
+   */
+
+  const session = await createSession(
+    env.DB,
+    user
+  );
 
   return json(
     {
       ok: true,
-
       message:
         "Tạo tài khoản thành công.",
-
-      user:
-        publicUser(user),
+      authenticated: true,
+      user: publicUser(user),
     },
     200,
     session.cookie,
@@ -550,16 +415,12 @@ async function handleRegister(
    LOGIN
 ========================================================= */
 
-async function handleLogin(
-  request,
-  env
-) {
+async function handleLogin(request, env) {
   if (!env.DB) {
     return json(
       {
         ok: false,
-        error:
-          "D1 DB chưa được cấu hình.",
+        error: "D1 DB chưa được cấu hình.",
       },
       500,
       null,
@@ -567,23 +428,17 @@ async function handleLogin(
     );
   }
 
-  const data =
-    await readJson(request);
+  const data = await readJson(request);
 
-  const email =
-    normalizeEmail(
-      data.email
-    );
+  const email = normalizeEmail(
+    data.email
+  );
 
-  const password =
-    String(
-      data.password || ""
-    );
+  const password = String(
+    data.password || ""
+  );
 
-  if (
-    !isEmail(email) ||
-    !password
-  ) {
+  if (!isEmail(email) || !password) {
     return json(
       {
         ok: false,
@@ -596,11 +451,10 @@ async function handleLogin(
     );
   }
 
-  const user =
-    await findUserByEmail(
-      env.DB,
-      email
-    );
+  const user = await findUserByEmail(
+    env.DB,
+    email
+  );
 
   if (!user) {
     return json(
@@ -651,12 +505,10 @@ async function handleLogin(
   return json(
     {
       ok: true,
-
       message:
         "Đăng nhập thành công.",
-
-      user:
-        publicUser(user),
+      authenticated: true,
+      user: publicUser(user),
     },
     200,
     session.cookie,
@@ -676,8 +528,7 @@ async function handleLogout(
     return json(
       {
         ok: false,
-        error:
-          "D1 DB chưa được cấu hình.",
+        error: "D1 DB chưa được cấu hình.",
       },
       500,
       null,
@@ -685,11 +536,10 @@ async function handleLogout(
     );
   }
 
-  const token =
-    getCookie(
-      request,
-      SESSION_COOKIE
-    );
+  const token = getCookie(
+    request,
+    SESSION_COOKIE
+  );
 
   if (token) {
     await env.DB
@@ -705,8 +555,8 @@ async function handleLogout(
   return json(
     {
       ok: true,
-      message:
-        "Đã đăng xuất.",
+      message: "Đã đăng xuất.",
+      authenticated: false,
     },
     200,
     deleteCookieHeader(),
@@ -726,8 +576,7 @@ async function handleMe(
     return json(
       {
         ok: false,
-        error:
-          "D1 DB chưa được cấu hình.",
+        error: "D1 DB chưa được cấu hình.",
       },
       500,
       null,
@@ -745,10 +594,7 @@ async function handleMe(
     return json(
       {
         ok: true,
-
-        authenticated:
-          false,
-
+        authenticated: false,
         user: null,
       },
       200,
@@ -760,12 +606,8 @@ async function handleMe(
   return json(
     {
       ok: true,
-
-      authenticated:
-        true,
-
-      user:
-        publicUser(user),
+      authenticated: true,
+      user: publicUser(user),
     },
     200,
     null,
@@ -788,16 +630,15 @@ async function findUserById(
     return null;
   }
 
-  const row =
-    await db
-      .prepare(
-        `SELECT *
-         FROM users
-         WHERE id = ?
-         LIMIT 1`
-      )
-      .bind(Number(id))
-      .first();
+  const row = await db
+    .prepare(
+      `SELECT *
+       FROM users
+       WHERE id = ?
+       LIMIT 1`
+    )
+    .bind(Number(id))
+    .first();
 
   return row
     ? normalizeUserRow(row)
@@ -808,59 +649,44 @@ async function findUserByEmail(
   db,
   email
 ) {
-  const row =
-    await db
-      .prepare(
-        `SELECT *
-         FROM users
-         WHERE lower(email) =
-               lower(?)
-         LIMIT 1`
-      )
-      .bind(email)
-      .first();
+  const row = await db
+    .prepare(
+      `SELECT *
+       FROM users
+       WHERE lower(email) = lower(?)
+       LIMIT 1`
+    )
+    .bind(email)
+    .first();
 
   return row
     ? normalizeUserRow(row)
     : null;
 }
 
-function normalizeUserRow(
-  row
-) {
+function normalizeUserRow(row) {
   return {
-    id:
-      Number(row.id),
+    id: Number(row.id),
 
-    username:
-      String(
-        row.username || ""
-      ),
+    email: String(
+      row.email || ""
+    ),
 
-    email:
-      String(
-        row.email || ""
-      ),
+    passwordHash: String(
+      row.password_hash || ""
+    ),
 
-    passwordHash:
-      String(
-        row.password_hash || ""
-      ),
+    passwordSalt: String(
+      row.password_salt || ""
+    ),
 
-    passwordSalt:
-      String(
-        row.password_salt || ""
-      ),
+    role: String(
+      row.role || "PLAYER"
+    ),
 
-    role:
-      String(
-        row.role || "USER"
-      ),
-
-    balance:
-      Number(
-        row.balance || 0
-      ),
+    balance: Number(
+      row.balance || 0
+    ),
 
     createdAt:
       row.created_at || null,
@@ -869,17 +695,18 @@ function normalizeUserRow(
 
 function publicUser(user) {
   return {
-    id:
-      user.id,
+    id: user.id,
 
-    username:
-      user.username,
+    /*
+     * Không còn username.
+     *
+     * Frontend có thể dùng email
+     * để hiển thị tài khoản.
+     */
 
-    email:
-      user.email,
+    email: user.email,
 
-    role:
-      user.role,
+    role: user.role,
 
     balance:
       Number.isFinite(
@@ -917,11 +744,8 @@ async function hashPassword(
     await crypto.subtle.deriveBits(
       {
         name: "PBKDF2",
-
         salt,
-
         iterations,
-
         hash: "SHA-256",
       },
       key,
@@ -936,12 +760,10 @@ async function verifyStoredPassword(
   password
 ) {
   /*
-   * -------------------------------------------------------
    * Format mới:
    *
    * password_hash = base64url(hash)
    * password_salt = base64url(salt)
-   * -------------------------------------------------------
    */
 
   if (
@@ -977,11 +799,9 @@ async function verifyStoredPassword(
   }
 
   /*
-   * -------------------------------------------------------
    * Hỗ trợ format cũ:
    *
    * pbkdf2$100000$salt$hash
-   * -------------------------------------------------------
    */
 
   const stored =
@@ -1044,13 +864,6 @@ async function createSession(
   db,
   user
 ) {
-  /*
-   * sessions.token là PRIMARY KEY
-   * theo 0001.
-   *
-   * Vì vậy không cần token_hash.
-   */
-
   const token =
     bytesToB64Url(
       randomBytes(32)
@@ -1081,7 +894,6 @@ async function createSession(
 
   return {
     token,
-
     cookie:
       sessionCookie(token),
   };
@@ -1107,7 +919,7 @@ async function getCurrentUser(
     );
 
   /*
-   * Xóa session hết hạn.
+   * Dọn session hết hạn.
    */
 
   await db
@@ -1251,7 +1063,10 @@ async function handleTournament(
           registered >=
           maxTeams
             ? "FULL"
-            : tournament.status,
+            : String(
+                tournament.status ||
+                  "OPEN"
+              ).toUpperCase(),
 
         statusText:
           registered >=
@@ -1312,11 +1127,11 @@ async function getOrCreateTournament(
        VALUES (?, ?, ?, ?, ?)`
     )
     .bind(
-      "Giải Tử Chiến Mùa 1",
+      "GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1",
       fee,
       48,
       "OPEN",
-      "Giải đấu Tử Chiến Mùa 1."
+      "Giải đấu Vua Tử Chiến – Mùa 1."
     )
     .run();
 
@@ -1341,6 +1156,19 @@ async function handleTeamRegister(
   request,
   env
 ) {
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error:
+          "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
+
   const user =
     await getCurrentUser(
       request,
@@ -1474,7 +1302,7 @@ async function handleTeamRegister(
   }
 
   /* -------------------------------------------------------
-     Count registrations
+     COUNT REGISTRATIONS
   ------------------------------------------------------- */
 
   const count =
@@ -1522,22 +1350,20 @@ async function handleTeamRegister(
   }
 
   /* -------------------------------------------------------
-     User đã có team trong giải?
+     DUPLICATE USER
   ------------------------------------------------------- */
 
   const duplicate =
     await env.DB
       .prepare(
-        `SELECT
-           r.id
+        `SELECT r.id
          FROM registrations r
          INNER JOIN teams t
            ON t.id = r.team_id
-         WHERE
-           r.tournament_id = ?
+         WHERE r.tournament_id = ?
            AND t.owner_id = ?
-         AND r.status NOT IN
-           ('CANCELLED', 'FAILED')
+           AND r.status NOT IN
+             ('CANCELLED', 'FAILED')
          LIMIT 1`
       )
       .bind(
@@ -1560,7 +1386,7 @@ async function handleTeamRegister(
   }
 
   /* -------------------------------------------------------
-     INSERT TEAM
+     TEAM
   ------------------------------------------------------- */
 
   let teamId;
@@ -1589,8 +1415,7 @@ async function handleTeamRegister(
 
     teamId =
       Number(
-        teamResult.meta
-          ?.last_row_id
+        teamResult.meta?.last_row_id
       );
   } catch (error) {
     console.error(
@@ -1612,7 +1437,7 @@ async function handleTeamRegister(
   }
 
   /* -------------------------------------------------------
-     TEAM MEMBER #1
+     MEMBER #1
   ------------------------------------------------------- */
 
   try {
@@ -1629,13 +1454,13 @@ async function handleTeamRegister(
       )
       .bind(
         teamId,
-        usernameOrEmail(user),
-        "",
+        user.email,
+        ""
       )
       .run();
 
     /* -----------------------------------------------------
-       TEAM MEMBER #2
+       MEMBER #2
     ----------------------------------------------------- */
 
     if (player2Email) {
@@ -1653,14 +1478,19 @@ async function handleTeamRegister(
         .bind(
           teamId,
           player2Email,
-          "",
+          ""
         )
         .run();
     }
   } catch (error) {
-    /*
-     * Không để team mồ côi nếu member insert lỗi.
-     */
+    await env.DB
+      .prepare(
+        `DELETE FROM team_members
+         WHERE team_id = ?`
+      )
+      .bind(teamId)
+      .run()
+      .catch(() => {});
 
     await env.DB
       .prepare(
@@ -1723,8 +1553,8 @@ async function handleTeamRegister(
 
     registrationId =
       Number(
-        registrationResult
-          .meta?.last_row_id
+        registrationResult.meta
+          ?.last_row_id
       );
   } catch (error) {
     await env.DB
@@ -1786,11 +1616,6 @@ async function handleTeamRegister(
       "PAYMENT INSERT ERROR:",
       error
     );
-
-    /*
-     * Registration vẫn giữ lại.
-     * Payment có thể tạo lại bằng admin/webhook.
-     */
   }
 
   await writeAudit(
@@ -1857,14 +1682,6 @@ async function handleRanking(
       request
     );
   }
-
-  /*
-   * Ranking lấy trực tiếp từ results.
-   *
-   * points = tổng points
-   * wins   = placement = 1
-   * losses = các trận có placement > 1
-   */
 
   const rows =
     await env.DB
@@ -1971,7 +1788,6 @@ async function handleRanking(
   return json(
     {
       ok: true,
-
       ranking,
     },
     200,
@@ -2029,23 +1845,6 @@ async function handlePaymentWebhook(
 
   const data =
     await readJson(request);
-
-  /*
-   * Có thể gửi:
-   *
-   * {
-   *   registrationId: 123,
-   *   status: "PAID",
-   *   reference: "..."
-   * }
-   *
-   * hoặc:
-   *
-   * {
-   *   teamId: 123,
-   *   status: "PAID"
-   * }
-   */
 
   let registrationId =
     Number(
@@ -2149,7 +1948,7 @@ async function handlePaymentWebhook(
   }
 
   /* -------------------------------------------------------
-     Registration status
+     REGISTRATION STATUS
   ------------------------------------------------------- */
 
   let registrationStatus =
@@ -2183,7 +1982,7 @@ async function handlePaymentWebhook(
     .run();
 
   /* -------------------------------------------------------
-     Payment
+     PAYMENT
   ------------------------------------------------------- */
 
   const payment =
@@ -2206,12 +2005,14 @@ async function handlePaymentWebhook(
         `UPDATE payments
          SET
            status = ?,
-           external_id = ?
+           external_id = ?,
+           raw_json = ?
          WHERE id = ?`
       )
       .bind(
         status,
         reference || null,
+        JSON.stringify(data),
         payment.id
       )
       .run();
@@ -2242,7 +2043,7 @@ async function handlePaymentWebhook(
   }
 
   /* -------------------------------------------------------
-     Team
+     TEAM
   ------------------------------------------------------- */
 
   const teamStatus =
@@ -2266,7 +2067,7 @@ async function handlePaymentWebhook(
     .run();
 
   /* -------------------------------------------------------
-     Audit
+     AUDIT
   ------------------------------------------------------- */
 
   const team =
@@ -2341,11 +2142,6 @@ async function writeAudit(
       )
       .run();
   } catch (error) {
-    /*
-     * Audit lỗi không được làm
-     * login/register/payment chết.
-     */
-
     console.error(
       "AUDIT ERROR:",
       error
@@ -2357,19 +2153,7 @@ async function writeAudit(
    HELPERS
 ========================================================= */
 
-function normalizeEmail(
-  value
-) {
-  return String(
-    value || ""
-  )
-    .trim()
-    .toLowerCase();
-}
-
-function normalizeUsername(
-  value
-) {
+function normalizeEmail(value) {
   return String(
     value || ""
   )
@@ -2378,32 +2162,9 @@ function normalizeUsername(
 }
 
 function isEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    .test(value);
-}
-
-function isUsername(
-  value
-) {
-  return /^[a-z0-9_]{3,30}$/
-    .test(value);
-}
-
-function usernameOrEmail(
-  user
-) {
-  return (
-    user.username ||
-    user.email
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value
   );
-}
-
-function chooseDefaultRole() {
-  /*
-   * 0001 dùng DEFAULT 'USER'.
-   */
-
-  return "USER";
 }
 
 function createOrderCode() {
@@ -2431,9 +2192,7 @@ function createOrderCode() {
    CRYPTO
 ========================================================= */
 
-function randomBytes(
-  length
-) {
+function randomBytes(length) {
   const bytes =
     new Uint8Array(length);
 
@@ -2480,9 +2239,7 @@ function timingSafeStringEqual(
   );
 }
 
-function bytesToB64Url(
-  bytes
-) {
+function bytesToB64Url(bytes) {
   let binary = "";
 
   for (
@@ -2500,9 +2257,7 @@ function bytesToB64Url(
     .replace(/=+$/g, "");
 }
 
-function b64UrlToBytes(
-  value
-) {
+function b64UrlToBytes(value) {
   try {
     const normalized =
       String(value)
@@ -2537,42 +2292,11 @@ function b64UrlToBytes(
   }
 }
 
-async function sha256Hex(
-  value
-) {
-  const data =
-    typeof value ===
-    "string"
-      ? new TextEncoder().encode(
-          value
-        )
-      : value;
-
-  const digest =
-    await crypto.subtle.digest(
-      "SHA-256",
-      data
-    );
-
-  return Array.from(
-    new Uint8Array(digest)
-  )
-    .map(
-      byte =>
-        byte
-          .toString(16)
-          .padStart(2, "0")
-    )
-    .join("");
-}
-
 /* =========================================================
    JSON
 ========================================================= */
 
-async function readJson(
-  request
-) {
+async function readJson(request) {
   const text =
     await request.text();
 
@@ -2606,9 +2330,7 @@ function safeError(error) {
    COOKIE
 ========================================================= */
 
-function sessionCookie(
-  token
-) {
+function sessionCookie(token) {
   return (
     `${SESSION_COOKIE}=${encodeURIComponent(token)}` +
     `; Max-Age=${SESSION_TTL_SECONDS}` +
@@ -2677,9 +2399,7 @@ function getCookie(
    HTTP / CORS
 ========================================================= */
 
-function corsHeaders(
-  request
-) {
+function corsHeaders(request) {
   const origin =
     request?.headers?.get(
       "Origin"
@@ -2696,9 +2416,7 @@ function corsHeaders(
       "access-control-allow-credentials"
     ] = "true";
 
-    headers[
-      "vary"
-    ] = "Origin";
+    headers["vary"] = "Origin";
   }
 
   headers[
