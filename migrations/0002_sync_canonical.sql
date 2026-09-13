@@ -1,27 +1,22 @@
-ALTER TABLE users
-ADD COLUMN password_salt TEXT NOT NULL DEFAULT '';
 
-ALTER TABLE users
-ADD COLUMN balance INTEGER NOT NULL DEFAULT 0;
+-- ============================================================
+-- 0002_sync_canonical.sql
+-- Đồng bộ teams với frontend hiện tại.
+--
+-- KHÔNG tạo app_*
+-- KHÔNG sửa users
+-- KHÔNG sửa sessions
+-- KHÔNG DROP dữ liệu
+-- ============================================================
 
 ALTER TABLE teams
-ADD COLUMN contact_email TEXT;
+ADD COLUMN logo_url TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE teams
-ADD COLUMN player2_email TEXT;
+ADD COLUMN contact_email TEXT NOT NULL DEFAULT '';
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  action TEXT NOT NULL,
-  target TEXT,
-  details TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_sessions_expiry
-ON sessions(expires_at);
+ALTER TABLE teams
+ADD COLUMN player2_email TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_registrations_team
 ON registrations(team_id);
@@ -34,3 +29,6 @@ ON payments(registration_id);
 
 CREATE INDEX IF NOT EXISTS idx_teams_owner
 ON teams(owner_id);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_expiry
+ON sessions(expires_at);
