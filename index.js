@@ -214,7 +214,45 @@ function safeEqual(a, b) {
   ) {
     return false;
   }
+async function hmacSha256Hex(secret, message) {
 
+  const key = await crypto.subtle.importKey(
+
+    "raw",
+
+    new TextEncoder().encode(secret),
+
+    {
+
+      name: "HMAC",
+
+      hash: "SHA-256",
+
+    },
+
+    false,
+
+    ["sign"]
+
+  );
+
+  const signature = await crypto.subtle.sign(
+
+    "HMAC",
+
+    key,
+
+    new TextEncoder().encode(message)
+
+  );
+
+  return [...new Uint8Array(signature)]
+
+    .map(byte => byte.toString(16).padStart(2, "0"))
+
+    .join("");
+
+}
   let result = 0;
 
   for (
@@ -2050,23 +2088,276 @@ async function ranking(
    PAYMENT WEBHOOK
    ============================================================ */
 
-async function paymentWebhook(
-  request,
-  env
-) {
-  const configured =
-    env.PAYMENT_WEBHOOK_SECRET;
+
+async function paymentWebhook(request, env) {
+  const configured = env.SEPAY_WEBHOOK_SECRET;
 
   if (!configured) {
     return json(
       {
         ok: false,
-        error:
-          "PAYMENT_WEBHOOK_SECRET chưa được cấu hình.",
+        error: "SEPAY_WEBHOOK_SECRET chưa được cấu hình.",
       },
       503
     );
   }
+
+  const signatureHeader =
+    request.headers.get("X-SePay-Signature") || "";
+
+  const timestampHeader =
+    request.headers.get("X-SePay-Timestamp") || "";
+
+  if (!signatureHeader || !timestampHeader) {
+    return json(
+      {
+        ok: false,
+        error: "Thiếu chữ ký hoặc timestamp của SePay.",
+      },
+      401
+    );
+  }
+
+  const timestamp = Number(timestampHeader);
+
+  if (!Number.isInteger(timestamp)) {
+    return json(
+      {
+        ok: false,
+        error: "Timestamp của SePay không hợp lệ.",
+      },
+      401
+    );
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  if (Math.abs(nowSeconds - timestamp) > 300) {
+    return json(
+      {
+        ok: false,
+        error: "Webhook đã hết hạn hoặc timestamp không hợp lệ.",
+      },
+      401
+    );
+  }
+
+  const rawBody = await request.text();
+
+  const expectedSignature =
+    "sha256=" +
+    await hmacSha256Hex(
+      configured,
+      `${timestamp}.${rawBody}`
+    );
+
+  if (!safeEqual(signatureHeader, expectedSignature)) {
+    return json(
+      {
+        ok: false,
+        error: "Chữ ký SePay không hợp lệ.",
+      },
+      401
+    );
+  }
+
+  let data;
+
+  try {
+    data = JSON.parse(rawBody);
+  } catch {
+    return json(
+      {
+        ok: false,
+        error: "Payload SePay không phải JSON hợp lệ.",
+      },
+      400
+    );
+  }
+
+  if (String(data.transferType || "").toLowerCase() !== "in") {
+    return json(
+      {
+        ok: false,
+        error: "Webhook không phải giao dịch tiền vào.",
+      },
+      400
+    );
+  }
+
+  const amount = Number(
+    data.transferAmount ||
+    data.amount ||
+    data.transfer_amount ||
+    0
+  );
+
+  const codeFromPayload =
+    String(data.code || "").trim();
+
+  const content =
+    String(data.content || "").trim();
+
+  const codeFromContent =
+    (
+      content.match(/VTC[A-Z0-9_-]+/i) || []
+    )[0] || "";
+
+  const orderCode =
+    (
+      codeFromPayload ||
+      codeFromContent
+    )
+      .trim()
+      .toUpperCase();
+
+  const transactionId =
+    String(data.id || "").trim();
+
+  if (!orderCode || amount <= 0 || !transactionId) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Thiếu mã đăng ký, số tiền hoặc mã giao dịch SePay.",
+      },
+      400
+    );
+  }
+
+  if (
+    env.SEPAY_BANK_ACCOUNT &&
+    String(data.accountNumber || "").trim() !==
+      String(env.SEPAY_BANK_ACCOUNT).trim()
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Giao dịch không đến từ tài khoản ngân hàng đã cấu hình.",
+      },
+      400
+    );
+  }
+
+  const registration =
+    await env.DB
+      .prepare(`
+        SELECT
+          id,
+          team_id,
+          tournament_id,
+          amount,
+          status
+        FROM registrations
+        WHERE order_code = ?
+        LIMIT 1
+      `)
+      .bind(orderCode)
+      .first();
+
+  if (!registration) {
+    return json(
+      {
+        ok: false,
+        error: "Không tìm thấy mã đăng ký.",
+      },
+      404
+    );
+  }
+
+  const required =
+    Number(registration.amount || 0);
+
+  if (amount < required) {
+    return json(
+      {
+        ok: false,
+        error: "Số tiền thanh toán chưa đủ.",
+      },
+      400
+    );
+  }
+
+  const existed =
+    await env.DB
+      .prepare(`
+        SELECT id
+        FROM payments
+        WHERE
+          gateway = 'SEPAY'
+          AND transaction_id = ?
+        LIMIT 1
+      `)
+      .bind(transactionId)
+      .first();
+
+  if (existed) {
+    return json({
+      ok: true,
+      message: "Giao dịch đã được xử lý.",
+      registrationId: registration.id,
+      status: "PAID",
+    });
+  }
+
+  await env.DB
+    .prepare(`
+      INSERT INTO payments
+        (
+          registration_id,
+          gateway,
+          transaction_id,
+          amount,
+          status,
+          raw_json
+        )
+      VALUES
+        (
+          ?,
+          'SEPAY',
+          ?,
+          ?,
+          'SUCCESS',
+          ?
+        )
+    `)
+    .bind(
+      registration.id,
+      transactionId,
+      amount,
+      rawBody
+    )
+    .run();
+
+  await env.DB
+    .prepare(`
+      UPDATE registrations
+      SET
+        status = 'PAID',
+        updated_at = CURRENT_TIMESTAMP,
+        reviewed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    .bind(registration.id)
+    .run();
+
+  await env.DB
+    .prepare(`
+      UPDATE teams
+      SET status = 'ACTIVE'
+      WHERE id = ?
+    `)
+    .bind(registration.team_id)
+    .run();
+
+  return json({
+    ok: true,
+    message: "Đã xác nhận thanh toán.",
+    registrationId: registration.id,
+    status: "PAID",
+  });
+}
 
   const data =
     await bodyJson(request);
