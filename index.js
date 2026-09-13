@@ -214,45 +214,7 @@ function safeEqual(a, b) {
   ) {
     return false;
   }
-async function hmacSha256Hex(secret, message) {
 
-  const key = await crypto.subtle.importKey(
-
-    "raw",
-
-    new TextEncoder().encode(secret),
-
-    {
-
-      name: "HMAC",
-
-      hash: "SHA-256",
-
-    },
-
-    false,
-
-    ["sign"]
-
-  );
-
-  const signature = await crypto.subtle.sign(
-
-    "HMAC",
-
-    key,
-
-    new TextEncoder().encode(message)
-
-  );
-
-  return [...new Uint8Array(signature)]
-
-    .map(byte => byte.toString(16).padStart(2, "0"))
-
-    .join("");
-
-}
   let result = 0;
 
   for (
@@ -265,6 +227,51 @@ async function hmacSha256Hex(secret, message) {
   }
 
   return result === 0;
+}
+
+/* ============================================================
+   SEPAY HMAC SHA-256
+   ============================================================ */
+
+async function hmacSha256Hex(
+  secret,
+  message
+) {
+  const key =
+    await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(
+        secret
+      ),
+      {
+        name: "HMAC",
+        hash: "SHA-256",
+      },
+      false,
+      ["sign"]
+    );
+
+  const signature =
+    await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(
+        message
+      )
+    );
+
+  return [
+    ...new Uint8Array(
+      signature
+    ),
+  ]
+    .map(
+      byte =>
+        byte
+          .toString(16)
+          .padStart(2, "0")
+    )
+    .join("");
 }
 
 /* ============================================================
@@ -1340,13 +1347,6 @@ async function tournament(
       0
     );
 
-  /*
-   * LỊCH THI ĐẤU PUBLIC
-   *
-   * Lấy trực tiếp từ matches.
-   * Admin thay đổi DB => public thay đổi theo.
-   */
-
   let schedule = [];
 
   try {
@@ -1422,10 +1422,6 @@ async function tournament(
         })
       );
   } catch {
-    /*
-     * Nếu matches/slots có vấn đề,
-     * giải đấu vẫn phải hiển thị.
-     */
     schedule = [];
   }
 
@@ -1981,16 +1977,6 @@ async function ranking(
     });
   }
 
-  /*
-   * QUAN TRỌNG:
-   *
-   * Kết quả phải thuộc MATCH
-   * của chính tournament hiện tại.
-   *
-   * Tránh trường hợp điểm của
-   * giải cũ bị cộng vào giải mới.
-   */
-
   const result =
     await env.DB
       .prepare(`
@@ -2085,64 +2071,99 @@ async function ranking(
 }
 
 /* ============================================================
-   PAYMENT WEBHOOK
+   PAYMENT WEBHOOK – SEPAY HMAC
    ============================================================ */
 
-
-async function paymentWebhook(request, env) {
-  const configured = env.SEPAY_WEBHOOK_SECRET;
+async function paymentWebhook(
+  request,
+  env
+) {
+  const configured =
+    env.SEPAY_WEBHOOK_SECRET;
 
   if (!configured) {
     return json(
       {
         ok: false,
-        error: "SEPAY_WEBHOOK_SECRET chưa được cấu hình.",
+        error:
+          "SEPAY_WEBHOOK_SECRET chưa được cấu hình.",
       },
       503
     );
   }
 
   const signatureHeader =
-    request.headers.get("X-SePay-Signature") || "";
+    request.headers.get(
+      "X-SePay-Signature"
+    ) || "";
 
   const timestampHeader =
-    request.headers.get("X-SePay-Timestamp") || "";
+    request.headers.get(
+      "X-SePay-Timestamp"
+    ) || "";
 
-  if (!signatureHeader || !timestampHeader) {
+  if (
+    !signatureHeader ||
+    !timestampHeader
+  ) {
     return json(
       {
         ok: false,
-        error: "Thiếu chữ ký hoặc timestamp của SePay.",
+        error:
+          "Thiếu chữ ký hoặc timestamp của SePay.",
       },
       401
     );
   }
 
-  const timestamp = Number(timestampHeader);
+  const timestamp =
+    Number(
+      timestampHeader
+    );
 
-  if (!Number.isInteger(timestamp)) {
+  if (
+    !Number.isInteger(
+      timestamp
+    )
+  ) {
     return json(
       {
         ok: false,
-        error: "Timestamp của SePay không hợp lệ.",
+        error:
+          "Timestamp của SePay không hợp lệ.",
       },
       401
     );
   }
 
-  const nowSeconds = Math.floor(Date.now() / 1000);
+  const nowSeconds =
+    Math.floor(
+      Date.now() / 1000
+    );
 
-  if (Math.abs(nowSeconds - timestamp) > 300) {
+  if (
+    Math.abs(
+      nowSeconds -
+        timestamp
+    ) > 300
+  ) {
     return json(
       {
         ok: false,
-        error: "Webhook đã hết hạn hoặc timestamp không hợp lệ.",
+        error:
+          "Webhook đã hết hạn hoặc timestamp không hợp lệ.",
       },
       401
     );
   }
 
-  const rawBody = await request.text();
+  /*
+   * QUAN TRỌNG:
+   * Phải lấy raw body trước khi JSON.parse.
+   */
+
+  const rawBody =
+    await request.text();
 
   const expectedSignature =
     "sha256=" +
@@ -2151,11 +2172,17 @@ async function paymentWebhook(request, env) {
       `${timestamp}.${rawBody}`
     );
 
-  if (!safeEqual(signatureHeader, expectedSignature)) {
+  if (
+    !safeEqual(
+      signatureHeader,
+      expectedSignature
+    )
+  ) {
     return json(
       {
         ok: false,
-        error: "Chữ ký SePay không hợp lệ.",
+        error:
+          "Chữ ký SePay không hợp lệ.",
       },
       401
     );
@@ -2164,43 +2191,72 @@ async function paymentWebhook(request, env) {
   let data;
 
   try {
-    data = JSON.parse(rawBody);
+    data =
+      JSON.parse(
+        rawBody
+      );
   } catch {
     return json(
       {
         ok: false,
-        error: "Payload SePay không phải JSON hợp lệ.",
+        error:
+          "Payload SePay không phải JSON hợp lệ.",
       },
       400
     );
   }
 
-  if (String(data.transferType || "").toLowerCase() !== "in") {
+  /*
+   * Chỉ nhận giao dịch tiền vào.
+   */
+
+  if (
+    String(
+      data.transferType ||
+      ""
+    ).toLowerCase() !==
+    "in"
+  ) {
     return json(
       {
         ok: false,
-        error: "Webhook không phải giao dịch tiền vào.",
+        error:
+          "Webhook không phải giao dịch tiền vào.",
       },
       400
     );
   }
 
-  const amount = Number(
-    data.transferAmount ||
-    data.amount ||
-    data.transfer_amount ||
-    0
-  );
+  const amount =
+    Number(
+      data.transferAmount ||
+      data.amount ||
+      data.transfer_amount ||
+      0
+    );
 
   const codeFromPayload =
-    String(data.code || "").trim();
+    String(
+      data.code ||
+      ""
+    ).trim();
 
   const content =
-    String(data.content || "").trim();
+    String(
+      data.content ||
+      ""
+    ).trim();
+
+  /*
+   * Cho phép lấy mã VTC...
+   * từ nội dung chuyển khoản.
+   */
 
   const codeFromContent =
     (
-      content.match(/VTC[A-Z0-9_-]+/i) || []
+      content.match(
+        /VTC[A-Z0-9_-]+/i
+      ) || []
     )[0] || "";
 
   const orderCode =
@@ -2212,9 +2268,16 @@ async function paymentWebhook(request, env) {
       .toUpperCase();
 
   const transactionId =
-    String(data.id || "").trim();
+    String(
+      data.id ||
+      ""
+    ).trim();
 
-  if (!orderCode || amount <= 0 || !transactionId) {
+  if (
+    !orderCode ||
+    amount <= 0 ||
+    !transactionId
+  ) {
     return json(
       {
         ok: false,
@@ -2225,198 +2288,26 @@ async function paymentWebhook(request, env) {
     );
   }
 
+  /*
+   * Nếu đã cấu hình số tài khoản ngân hàng
+   * thì bắt buộc giao dịch phải đến đúng tài khoản.
+   */
+
   if (
     env.SEPAY_BANK_ACCOUNT &&
-    String(data.accountNumber || "").trim() !==
-      String(env.SEPAY_BANK_ACCOUNT).trim()
+    String(
+      data.accountNumber ||
+      ""
+    ).trim() !==
+      String(
+        env.SEPAY_BANK_ACCOUNT
+      ).trim()
   ) {
     return json(
       {
         ok: false,
         error:
           "Giao dịch không đến từ tài khoản ngân hàng đã cấu hình.",
-      },
-      400
-    );
-  }
-
-  const registration =
-    await env.DB
-      .prepare(`
-        SELECT
-          id,
-          team_id,
-          tournament_id,
-          amount,
-          status
-        FROM registrations
-        WHERE order_code = ?
-        LIMIT 1
-      `)
-      .bind(orderCode)
-      .first();
-
-  if (!registration) {
-    return json(
-      {
-        ok: false,
-        error: "Không tìm thấy mã đăng ký.",
-      },
-      404
-    );
-  }
-
-  const required =
-    Number(registration.amount || 0);
-
-  if (amount < required) {
-    return json(
-      {
-        ok: false,
-        error: "Số tiền thanh toán chưa đủ.",
-      },
-      400
-    );
-  }
-
-  const existed =
-    await env.DB
-      .prepare(`
-        SELECT id
-        FROM payments
-        WHERE
-          gateway = 'SEPAY'
-          AND transaction_id = ?
-        LIMIT 1
-      `)
-      .bind(transactionId)
-      .first();
-
-  if (existed) {
-    return json({
-      ok: true,
-      message: "Giao dịch đã được xử lý.",
-      registrationId: registration.id,
-      status: "PAID",
-    });
-  }
-
-  await env.DB
-    .prepare(`
-      INSERT INTO payments
-        (
-          registration_id,
-          gateway,
-          transaction_id,
-          amount,
-          status,
-          raw_json
-        )
-      VALUES
-        (
-          ?,
-          'SEPAY',
-          ?,
-          ?,
-          'SUCCESS',
-          ?
-        )
-    `)
-    .bind(
-      registration.id,
-      transactionId,
-      amount,
-      rawBody
-    )
-    .run();
-
-  await env.DB
-    .prepare(`
-      UPDATE registrations
-      SET
-        status = 'PAID',
-        updated_at = CURRENT_TIMESTAMP,
-        reviewed_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `)
-    .bind(registration.id)
-    .run();
-
-  await env.DB
-    .prepare(`
-      UPDATE teams
-      SET status = 'ACTIVE'
-      WHERE id = ?
-    `)
-    .bind(registration.team_id)
-    .run();
-
-  return json({
-    ok: true,
-    message: "Đã xác nhận thanh toán.",
-    registrationId: registration.id,
-    status: "PAID",
-  });
-}
-
-  const data =
-    await bodyJson(request);
-
-  const secret =
-    String(
-      data.secret || ""
-    );
-
-  if (
-    !safeEqual(
-      secret,
-      configured
-    )
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Webhook secret không hợp lệ.",
-      },
-      401
-    );
-  }
-
-  const orderCode =
-    String(
-      data.orderCode ||
-      data.order_code ||
-      data.content ||
-      ""
-    ).trim();
-
-  const amount =
-    Number(
-      data.amount ||
-      data.transferAmount ||
-      data.transfer_amount ||
-      0
-    );
-
-  const transactionId =
-    String(
-      data.transactionId ||
-      data.transaction_id ||
-      data.externalId ||
-      data.external_id ||
-      orderCode
-    ).trim();
-
-  if (
-    !orderCode ||
-    amount <= 0
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Thiếu mã đăng ký hoặc số tiền.",
       },
       400
     );
@@ -2458,7 +2349,8 @@ async function paymentWebhook(request, env) {
     );
 
   if (
-    amount < required
+    amount <
+    required
   ) {
     return json(
       {
@@ -2470,12 +2362,19 @@ async function paymentWebhook(request, env) {
     );
   }
 
+  /*
+   * Chống xử lý một transaction nhiều lần.
+   */
+
   const existed =
     await env.DB
       .prepare(`
-        SELECT id
+        SELECT
+          id
         FROM payments
-        WHERE transaction_id = ?
+        WHERE
+          gateway = 'SEPAY'
+          AND transaction_id = ?
         LIMIT 1
       `)
       .bind(
@@ -2488,8 +2387,16 @@ async function paymentWebhook(request, env) {
       ok: true,
       message:
         "Giao dịch đã được xử lý.",
+      registrationId:
+        registration.id,
+      status:
+        "PAID",
     });
   }
+
+  /*
+   * Lưu giao dịch thành công.
+   */
 
   await env.DB
     .prepare(`
@@ -2505,7 +2412,7 @@ async function paymentWebhook(request, env) {
       VALUES
         (
           ?,
-          'BANK',
+          'SEPAY',
           ?,
           ?,
           'SUCCESS',
@@ -2516,9 +2423,13 @@ async function paymentWebhook(request, env) {
       registration.id,
       transactionId,
       amount,
-      JSON.stringify(data)
+      rawBody
     )
     .run();
+
+  /*
+   * Đánh dấu đăng ký đã thanh toán.
+   */
 
   await env.DB
     .prepare(`
@@ -2526,6 +2437,8 @@ async function paymentWebhook(request, env) {
       SET
         status = 'PAID',
         updated_at =
+          CURRENT_TIMESTAMP,
+        reviewed_at =
           CURRENT_TIMESTAMP
       WHERE id = ?
     `)
@@ -2534,10 +2447,15 @@ async function paymentWebhook(request, env) {
     )
     .run();
 
+  /*
+   * Kích hoạt team sau khi thanh toán.
+   */
+
   await env.DB
     .prepare(`
       UPDATE teams
-      SET status = 'ACTIVE'
+      SET
+        status = 'ACTIVE'
       WHERE id = ?
     `)
     .bind(
@@ -4272,14 +4190,6 @@ async function adminSaveRanking(
       );
     }
 
-    /*
-     * Mỗi team chỉ có một dòng
-     * trong bảng BXH ADMIN.
-     *
-     * Lưu điểm mới => xóa điểm cũ
-     * của team đó rồi thêm lại.
-     */
-
     await env.DB
       .prepare(`
         DELETE FROM results
@@ -4884,6 +4794,7 @@ export default {
        * Cleanup session nhẹ,
        * không chặn request.
        */
+
       if (
         ctx?.waitUntil
       ) {
