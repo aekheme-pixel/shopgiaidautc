@@ -33,6 +33,15 @@
  *   game_uid
  *   nickname
  *
+ * tournaments:
+ *   id
+ *   name
+ *   description
+ *   fee
+ *   max_teams
+ *   status
+ *   created_at
+ *
  * registrations:
  *   id
  *   order_code
@@ -47,7 +56,7 @@
  *   reviewed_by
  *
  * payments:
- *   dùng transaction_id theo DB hiện tại
+ *   transaction_id
  *
  * sessions:
  *   id
@@ -55,11 +64,29 @@
  *   expires_at
  *   created_at
  *
+ * matches:
+ *   id
+ *   tournament_id
+ *   slot_id
+ *   room_id
+ *   room_password
+ *   start_at
+ *   status
+ *
+ * results:
+ *   id
+ *   match_id
+ *   team_id
+ *   placement
+ *   kills
+ *   points
+ *
  * KHÔNG DÙNG app_*
  * ============================================================
  */
 
 const SESSION_COOKIE = "vtc_session";
+
 const SESSION_TTL_MS =
   30 * 24 * 60 * 60 * 1000;
 
@@ -135,8 +162,11 @@ function fromBase64url(value) {
       );
 
   const binary = atob(padded);
+
   const bytes =
-    new Uint8Array(binary.length);
+    new Uint8Array(
+      binary.length
+    );
 
   for (
     let i = 0;
@@ -314,10 +344,14 @@ function cookies(request) {
         .trim();
 
     if (key) {
-      result[key] =
-        decodeURIComponent(
-          value
-        );
+      try {
+        result[key] =
+          decodeURIComponent(
+            value
+          );
+      } catch {
+        result[key] = value;
+      }
     }
   }
 
@@ -376,6 +410,23 @@ function validEmail(value) {
   );
 }
 
+function positiveNumber(value, fallback = 0) {
+  const n = Number(value);
+
+  return Number.isFinite(n)
+    ? n
+    : fallback;
+}
+
+function cleanString(
+  value,
+  max = 500
+) {
+  return String(value ?? "")
+    .trim()
+    .slice(0, max);
+}
+
 /* ============================================================
    USER
    ============================================================ */
@@ -384,14 +435,11 @@ function publicUser(user) {
   return {
     id: Number(user.id),
     email: user.email,
+
     role:
       user.role ||
       "PLAYER",
 
-    /*
-     * DB hiện tại chưa bắt buộc có balance.
-     * Frontend vẫn nhận được số dư = 0.
-     */
     balance: Number(
       user.balance || 0
     ),
@@ -471,13 +519,19 @@ async function currentSession(
 
     return {
       token,
+
       user: {
         id: row.uid,
-        email: row.email,
+
+        email:
+          row.email,
+
         role:
           row.role ||
           "PLAYER",
+
         balance: 0,
+
         created_at:
           row.created_at,
       },
@@ -517,6 +571,65 @@ async function createSession(
     .run();
 
   return token;
+}
+
+/* ============================================================
+   ADMIN AUTHORIZATION
+   ============================================================ */
+
+function isAdminRole(role) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPER_ADMIN"
+  );
+}
+
+async function requireAdmin(
+  request,
+  env
+) {
+  const session =
+    await currentSession(
+      request,
+      env
+    );
+
+  if (!session) {
+    return {
+      ok: false,
+      response: json(
+        {
+          ok: false,
+          error:
+            "Bạn chưa đăng nhập.",
+        },
+        401
+      ),
+    };
+  }
+
+  if (
+    !isAdminRole(
+      session.user.role
+    )
+  ) {
+    return {
+      ok: false,
+      response: json(
+        {
+          ok: false,
+          error:
+            "Bạn không có quyền truy cập trang quản trị.",
+        },
+        403
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    session,
+  };
 }
 
 /* ============================================================
@@ -1081,11 +1194,6 @@ async function me(
 async function getTournament(
   env
 ) {
-  /*
-   * Chỉ dùng các cột chắc chắn
-   * có trong DB hiện tại.
-   */
-
   return await env.DB
     .prepare(`
       SELECT
@@ -1130,19 +1238,32 @@ async function tournament(
   if (!t) {
     return json({
       ok: true,
+
       tournament: {
         id: null,
+
         name:
           "Chưa có giải đấu",
+
         description:
           "Hiện chưa có giải đấu đang mở.",
+
         registered: 0,
+
         slots: 0,
+
         remaining: 0,
+
         entryFee: 0,
-        status: "CLOSED",
+
+        status:
+          "CLOSED",
+
         statusText:
           "CHƯA MỞ",
+
+        schedule: [],
+
         bank,
       },
     });
@@ -1181,6 +1302,95 @@ async function tournament(
       0
     );
 
+  /*
+   * LỊCH THI ĐẤU PUBLIC
+   *
+   * Lấy trực tiếp từ matches.
+   * Admin thay đổi DB => public thay đổi theo.
+   */
+
+  let schedule = [];
+
+  try {
+    const scheduleResult =
+      await env.DB
+        .prepare(`
+          SELECT
+            m.id,
+            m.start_at,
+            m.room_id,
+            m.status,
+            m.slot_id,
+            s.slot_time,
+            s.group_name
+
+          FROM matches m
+
+          LEFT JOIN slots s
+            ON s.id = m.slot_id
+
+          WHERE
+            m.tournament_id = ?
+
+          ORDER BY
+            CASE
+              WHEN m.start_at IS NULL
+              THEN 1
+              ELSE 0
+            END,
+            m.start_at ASC,
+            m.id ASC
+
+          LIMIT 50
+        `)
+        .bind(t.id)
+        .all();
+
+    schedule =
+      (
+        scheduleResult.results ||
+        []
+      ).map(
+        row => ({
+          id:
+            Number(row.id),
+
+          startAt:
+            row.start_at ||
+            null,
+
+          roomId:
+            row.room_id ||
+            "",
+
+          status:
+            row.status ||
+            "SCHEDULED",
+
+          slotId:
+            row.slot_id == null
+              ? null
+              : Number(
+                  row.slot_id
+                ),
+
+          slotTime:
+            row.slot_time ||
+            null,
+
+          groupName:
+            row.group_name ||
+            "",
+        })
+      );
+  } catch {
+    /*
+     * Nếu matches/slots có vấn đề,
+     * giải đấu vẫn phải hiển thị.
+     */
+    schedule = [];
+  }
+
   return json({
     ok: true,
 
@@ -1216,6 +1426,8 @@ async function tournament(
           ? "CÒN SLOT"
           : "HẾT SLOT",
 
+      schedule,
+
       bank,
     },
   });
@@ -1250,14 +1462,16 @@ async function teamRegister(
     await bodyJson(request);
 
   const teamName =
-    String(
-      data.teamName || ""
-    ).trim();
+    cleanString(
+      data.teamName,
+      60
+    );
 
   const logoUrl =
-    String(
-      data.logoUrl || ""
-    ).trim();
+    cleanString(
+      data.logoUrl,
+      1000
+    );
 
   const contactEmail =
     email(
@@ -1279,19 +1493,6 @@ async function teamRegister(
         ok: false,
         error:
           "Tên team phải có ít nhất 2 ký tự.",
-      },
-      400
-    );
-  }
-
-  if (
-    teamName.length > 60
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Tên team tối đa 60 ký tự.",
       },
       400
     );
@@ -1380,11 +1581,6 @@ async function teamRegister(
     );
   }
 
-  /*
-   * Mỗi tài khoản chỉ đăng ký
-   * một team cho một giải.
-   */
-
   const duplicate =
     await env.DB
       .prepare(`
@@ -1418,7 +1614,8 @@ async function teamRegister(
 
   const orderCode =
     "VTC" +
-    Date.now().toString(36)
+    Date.now()
+      .toString(36)
       .toUpperCase() +
     randomToken(5)
       .toUpperCase();
@@ -1432,13 +1629,6 @@ async function teamRegister(
   let registrationId;
 
   try {
-    /*
-     * teams sau migration:
-     * logo_url
-     * contact_email
-     * player2_email
-     */
-
     const teamResult =
       await env.DB
         .prepare(`
@@ -1498,16 +1688,11 @@ async function teamRegister(
         team?.id;
     }
 
-    /*
-     * team_members schema hiện tại:
-     *
-     * team_id
-     * user_id
-     * game_uid
-     * nickname
-     *
-     * Chủ team được thêm tự động.
-     */
+    if (!teamId) {
+      throw new Error(
+        "Không tạo được team."
+      );
+    }
 
     await env.DB
       .prepare(`
@@ -1528,15 +1713,6 @@ async function teamRegister(
         teamName
       )
       .run();
-
-    /*
-     * Nếu email thành viên 2
-     * đã có tài khoản trên hệ thống,
-     * tự liên kết tài khoản đó.
-     *
-     * Nếu chưa có tài khoản:
-     * vẫn lưu email ở teams.player2_email.
-     */
 
     if (
       player2Email &&
@@ -1578,10 +1754,6 @@ async function teamRegister(
           .run();
       }
     }
-
-    /*
-     * registrations schema hiện tại
-     */
 
     const registrationResult =
       await env.DB
@@ -1636,13 +1808,11 @@ async function teamRegister(
         reg?.id;
     }
 
-    /*
-     * payments:
-     *
-     * DB hiện tại có transaction_id.
-     *
-     * Ta tạo payment PENDING trước.
-     */
+    if (!registrationId) {
+      throw new Error(
+        "Không tạo được đơn đăng ký."
+      );
+    }
 
     await env.DB
       .prepare(`
@@ -1672,7 +1842,9 @@ async function teamRegister(
         JSON.stringify({
           type:
             "BANK_QR",
+
           orderCode,
+
           createdAt:
             new Date().toISOString(),
         })
@@ -1705,11 +1877,16 @@ async function teamRegister(
         registration: {
           id:
             registrationId,
+
           teamId,
+
           tournamentId:
             t.id,
+
           orderCode,
+
           amount,
+
           status:
             "AWAITING_PAYMENT",
         },
@@ -1747,7 +1924,7 @@ async function teamRegister(
 }
 
 /* ============================================================
-   RANKING
+   PUBLIC RANKING
    ============================================================ */
 
 async function ranking(
@@ -1767,7 +1944,13 @@ async function ranking(
   }
 
   /*
-   * Chỉ tính team đã thanh toán.
+   * QUAN TRỌNG:
+   *
+   * Kết quả phải thuộc MATCH
+   * của chính tournament hiện tại.
+   *
+   * Tránh trường hợp điểm của
+   * giải cũ bị cộng vào giải mới.
    */
 
   const result =
@@ -1794,18 +1977,27 @@ async function ranking(
         JOIN registrations reg
           ON reg.team_id =
              tm.id
+          AND reg.tournament_id = ?
 
         LEFT JOIN results r
           ON r.team_id =
              tm.id
 
-        WHERE
-          reg.tournament_id = ?
+        LEFT JOIN matches m
+          ON m.id =
+             r.match_id
+          AND m.tournament_id = ?
 
-          AND reg.status IN (
+        WHERE
+          reg.status IN (
             'PAID',
             'CONFIRMED',
             'APPROVED'
+          )
+
+          AND (
+            r.id IS NULL
+            OR m.id IS NOT NULL
           )
 
         GROUP BY
@@ -1819,7 +2011,10 @@ async function ranking(
 
         LIMIT 100
       `)
-      .bind(t.id)
+      .bind(
+        t.id,
+        t.id
+      )
       .all();
 
   return json({
@@ -1984,10 +2179,6 @@ async function paymentWebhook(
     );
   }
 
-  /*
-   * Chống xử lý giao dịch trùng.
-   */
-
   const existed =
     await env.DB
       .prepare(`
@@ -2052,11 +2243,6 @@ async function paymentWebhook(
     )
     .run();
 
-  /*
-   * Team thanh toán thành công
-   * chuyển sang ACTIVE.
-   */
-
   await env.DB
     .prepare(`
       UPDATE teams
@@ -2070,13 +2256,2127 @@ async function paymentWebhook(
 
   return json({
     ok: true,
+
     message:
       "Đã xác nhận thanh toán.",
+
     registrationId:
       registration.id,
+
     status:
       "PAID",
   });
+}
+
+/* ============================================================
+   ADMIN: ME
+   ============================================================ */
+
+async function adminMe(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  return json({
+    ok: true,
+    authenticated: true,
+
+    admin:
+      publicUser(
+        auth.session.user
+      ),
+  });
+}
+
+/* ============================================================
+   ADMIN: TOURNAMENT LIST
+   ============================================================ */
+
+async function adminTournaments(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  try {
+    const result =
+      await env.DB
+        .prepare(`
+          SELECT
+            t.id,
+            t.name,
+            t.description,
+            t.fee,
+            t.max_teams,
+            t.status,
+            t.created_at,
+
+            (
+              SELECT COUNT(*)
+              FROM registrations r
+              WHERE
+                r.tournament_id =
+                  t.id
+                AND r.status NOT IN (
+                  'CANCELLED',
+                  'REJECTED'
+                )
+            ) AS registered
+
+          FROM tournaments t
+
+          ORDER BY
+            t.id DESC
+
+          LIMIT 100
+        `)
+        .all();
+
+    return json({
+      ok: true,
+
+      tournaments:
+        (
+          result.results ||
+          []
+        ).map(
+          row => ({
+            id:
+              Number(row.id),
+
+            name:
+              row.name,
+
+            description:
+              row.description ||
+              "",
+
+            fee:
+              Number(
+                row.fee || 0
+              ),
+
+            maxTeams:
+              Number(
+                row.max_teams ||
+                0
+              ),
+
+            status:
+              row.status,
+
+            registered:
+              Number(
+                row.registered ||
+                0
+              ),
+
+            createdAt:
+              row.created_at ||
+              null,
+          })
+        ),
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          error?.message ||
+          "Không lấy được danh sách giải đấu.",
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: CREATE TOURNAMENT
+   ============================================================ */
+
+async function adminCreateTournament(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const data =
+    await bodyJson(request);
+
+  const name =
+    cleanString(
+      data.name,
+      150
+    );
+
+  const description =
+    cleanString(
+      data.description,
+      2000
+    );
+
+  const fee =
+    Math.max(
+      0,
+      Math.floor(
+        positiveNumber(
+          data.fee,
+          0
+        )
+      )
+    );
+
+  const maxTeams =
+    Math.max(
+      1,
+      Math.floor(
+        positiveNumber(
+          data.maxTeams,
+          48
+        )
+      )
+    );
+
+  const status =
+    String(
+      data.status ||
+      "OPEN"
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    name.length < 2
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Tên giải đấu phải có ít nhất 2 ký tự.",
+      },
+      400
+    );
+  }
+
+  if (
+    ![
+      "OPEN",
+      "CLOSED",
+      "DRAFT"
+    ].includes(status)
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Trạng thái giải đấu không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  try {
+    const result =
+      await env.DB
+        .prepare(`
+          INSERT INTO tournaments
+            (
+              name,
+              description,
+              fee,
+              max_teams,
+              status
+            )
+          VALUES
+            (?, ?, ?, ?, ?)
+        `)
+        .bind(
+          name,
+          description,
+          fee,
+          maxTeams,
+          status
+        )
+        .run();
+
+    const tournamentId =
+      result.meta
+        ?.last_row_id;
+
+    await writeAudit(
+      env,
+      auth.session.user.id,
+      "ADMIN_CREATE_TOURNAMENT",
+      tournamentId
+        ? `tournament:${tournamentId}`
+        : null,
+      {
+        name,
+        fee,
+        maxTeams,
+        status,
+      }
+    );
+
+    return json(
+      {
+        ok: true,
+
+        message:
+          "Tạo giải đấu thành công.",
+
+        tournamentId:
+          tournamentId ||
+          null,
+      },
+      201
+    );
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể tạo giải đấu: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: UPDATE TOURNAMENT
+   ============================================================ */
+
+async function adminUpdateTournament(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const id =
+    Number(
+      url.searchParams.get(
+        "id"
+      )
+    );
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "ID giải đấu không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  const data =
+    await bodyJson(request);
+
+  const name =
+    cleanString(
+      data.name,
+      150
+    );
+
+  const description =
+    cleanString(
+      data.description,
+      2000
+    );
+
+  const fee =
+    Math.max(
+      0,
+      Math.floor(
+        positiveNumber(
+          data.fee,
+          0
+        )
+      )
+    );
+
+  const maxTeams =
+    Math.max(
+      1,
+      Math.floor(
+        positiveNumber(
+          data.maxTeams,
+          48
+        )
+      )
+    );
+
+  const status =
+    String(
+      data.status ||
+      "OPEN"
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    name.length < 2
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Tên giải đấu không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  if (
+    ![
+      "OPEN",
+      "CLOSED",
+      "DRAFT"
+    ].includes(status)
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Trạng thái không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  try {
+    const result =
+      await env.DB
+        .prepare(`
+          UPDATE tournaments
+          SET
+            name = ?,
+            description = ?,
+            fee = ?,
+            max_teams = ?,
+            status = ?
+          WHERE id = ?
+        `)
+        .bind(
+          name,
+          description,
+          fee,
+          maxTeams,
+          status,
+          id
+        )
+        .run();
+
+    if (
+      !result.meta?.changes
+    ) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Không tìm thấy giải đấu.",
+        },
+        404
+      );
+    }
+
+    await writeAudit(
+      env,
+      auth.session.user.id,
+      "ADMIN_UPDATE_TOURNAMENT",
+      `tournament:${id}`,
+      {
+        name,
+        fee,
+        maxTeams,
+        status,
+      }
+    );
+
+    return json({
+      ok: true,
+      message:
+        "Đã cập nhật giải đấu.",
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          error?.message ||
+          "Không thể cập nhật giải đấu.",
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: SCHEDULE LIST
+   ============================================================ */
+
+async function adminSchedules(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const tournamentId =
+    Number(
+      url.searchParams.get(
+        "tournamentId"
+      )
+    );
+
+  if (
+    !Number.isInteger(
+      tournamentId
+    ) ||
+    tournamentId <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Thiếu tournamentId.",
+      },
+      400
+    );
+  }
+
+  try {
+    const result =
+      await env.DB
+        .prepare(`
+          SELECT
+            m.id,
+            m.tournament_id,
+            m.slot_id,
+            m.room_id,
+            m.room_password,
+            m.start_at,
+            m.status,
+
+            s.slot_time,
+            s.group_name,
+            s.capacity
+
+          FROM matches m
+
+          LEFT JOIN slots s
+            ON s.id = m.slot_id
+
+          WHERE
+            m.tournament_id = ?
+
+          ORDER BY
+            CASE
+              WHEN m.start_at IS NULL
+              THEN 1
+              ELSE 0
+            END,
+            m.start_at ASC,
+            m.id ASC
+        `)
+        .bind(
+          tournamentId
+        )
+        .all();
+
+    return json({
+      ok: true,
+
+      schedules:
+        (
+          result.results ||
+          []
+        ).map(
+          row => ({
+            id:
+              Number(row.id),
+
+            tournamentId:
+              Number(
+                row.tournament_id
+              ),
+
+            slotId:
+              row.slot_id == null
+                ? null
+                : Number(
+                    row.slot_id
+                  ),
+
+            roomId:
+              row.room_id ||
+              "",
+
+            roomPassword:
+              row.room_password ||
+              "",
+
+            startAt:
+              row.start_at ||
+              null,
+
+            status:
+              row.status ||
+              "SCHEDULED",
+
+            slotTime:
+              row.slot_time ||
+              null,
+
+            groupName:
+              row.group_name ||
+              "",
+
+            capacity:
+              row.capacity == null
+                ? null
+                : Number(
+                    row.capacity
+                  ),
+          })
+        ),
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không lấy được lịch thi đấu: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: CREATE SCHEDULE
+   ============================================================ */
+
+async function adminCreateSchedule(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const data =
+    await bodyJson(request);
+
+  const tournamentId =
+    Number(
+      data.tournamentId
+    );
+
+  const slotIdRaw =
+    data.slotId;
+
+  const slotId =
+    slotIdRaw === "" ||
+    slotIdRaw == null
+      ? null
+      : Number(
+          slotIdRaw
+        );
+
+  const roomId =
+    cleanString(
+      data.roomId,
+      100
+    );
+
+  const roomPassword =
+    cleanString(
+      data.roomPassword,
+      200
+    );
+
+  const startAt =
+    cleanString(
+      data.startAt,
+      100
+    );
+
+  const status =
+    String(
+      data.status ||
+      "SCHEDULED"
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    !Number.isInteger(
+      tournamentId
+    ) ||
+    tournamentId <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Giải đấu không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  if (
+    slotId !== null &&
+    (
+      !Number.isInteger(
+        slotId
+      ) ||
+      slotId <= 0
+    )
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Slot không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  if (!startAt) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Vui lòng chọn thời gian thi đấu.",
+      },
+      400
+    );
+  }
+
+  const tournamentExists =
+    await env.DB
+      .prepare(`
+        SELECT id
+        FROM tournaments
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        tournamentId
+      )
+      .first();
+
+  if (!tournamentExists) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không tìm thấy giải đấu.",
+      },
+      404
+    );
+  }
+
+  if (slotId !== null) {
+    const slot =
+      await env.DB
+        .prepare(`
+          SELECT id
+          FROM slots
+          WHERE
+            id = ?
+            AND tournament_id = ?
+          LIMIT 1
+        `)
+        .bind(
+          slotId,
+          tournamentId
+        )
+        .first();
+
+    if (!slot) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Slot không thuộc giải đấu này.",
+        },
+        400
+      );
+    }
+  }
+
+  try {
+    const result =
+      await env.DB
+        .prepare(`
+          INSERT INTO matches
+            (
+              tournament_id,
+              slot_id,
+              room_id,
+              room_password,
+              start_at,
+              status
+            )
+          VALUES
+            (?, ?, ?, ?, ?, ?)
+        `)
+        .bind(
+          tournamentId,
+          slotId,
+          roomId,
+          roomPassword,
+          startAt,
+          status
+        )
+        .run();
+
+    const matchId =
+      result.meta
+        ?.last_row_id;
+
+    await writeAudit(
+      env,
+      auth.session.user.id,
+      "ADMIN_CREATE_SCHEDULE",
+      matchId
+        ? `match:${matchId}`
+        : null,
+      {
+        tournamentId,
+        startAt,
+        roomId,
+        status,
+      }
+    );
+
+    return json(
+      {
+        ok: true,
+        message:
+          "Đã thêm lịch thi đấu.",
+        matchId:
+          matchId ||
+          null,
+      },
+      201
+    );
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể thêm lịch: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: UPDATE SCHEDULE
+   ============================================================ */
+
+async function adminUpdateSchedule(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const id =
+    Number(
+      url.searchParams.get(
+        "id"
+      )
+    );
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "ID lịch không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  const data =
+    await bodyJson(request);
+
+  const slotIdRaw =
+    data.slotId;
+
+  const slotId =
+    slotIdRaw === "" ||
+    slotIdRaw == null
+      ? null
+      : Number(
+          slotIdRaw
+        );
+
+  const roomId =
+    cleanString(
+      data.roomId,
+      100
+    );
+
+  const roomPassword =
+    cleanString(
+      data.roomPassword,
+      200
+    );
+
+  const startAt =
+    cleanString(
+      data.startAt,
+      100
+    );
+
+  const status =
+    String(
+      data.status ||
+      "SCHEDULED"
+    )
+      .trim()
+      .toUpperCase();
+
+  if (!startAt) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Vui lòng chọn thời gian.",
+      },
+      400
+    );
+  }
+
+  try {
+    const existing =
+      await env.DB
+        .prepare(`
+          SELECT
+            id,
+            tournament_id
+          FROM matches
+          WHERE id = ?
+          LIMIT 1
+        `)
+        .bind(id)
+        .first();
+
+    if (!existing) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Không tìm thấy lịch.",
+        },
+        404
+      );
+    }
+
+    if (slotId !== null) {
+      const slot =
+        await env.DB
+          .prepare(`
+            SELECT id
+            FROM slots
+            WHERE
+              id = ?
+              AND tournament_id = ?
+            LIMIT 1
+          `)
+          .bind(
+            slotId,
+            existing.tournament_id
+          )
+          .first();
+
+      if (!slot) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Slot không thuộc giải đấu.",
+          },
+          400
+        );
+      }
+    }
+
+    await env.DB
+      .prepare(`
+        UPDATE matches
+        SET
+          slot_id = ?,
+          room_id = ?,
+          room_password = ?,
+          start_at = ?,
+          status = ?
+        WHERE id = ?
+      `)
+      .bind(
+        slotId,
+        roomId,
+        roomPassword,
+        startAt,
+        status,
+        id
+      )
+      .run();
+
+    await writeAudit(
+      env,
+      auth.session.user.id,
+      "ADMIN_UPDATE_SCHEDULE",
+      `match:${id}`
+    );
+
+    return json({
+      ok: true,
+      message:
+        "Đã cập nhật lịch thi đấu.",
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể cập nhật lịch: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: DELETE SCHEDULE
+   ============================================================ */
+
+async function adminDeleteSchedule(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const id =
+    Number(
+      url.searchParams.get(
+        "id"
+      )
+    );
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "ID lịch không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  try {
+    const result =
+      await env.DB
+        .prepare(`
+          DELETE FROM matches
+          WHERE id = ?
+        `)
+        .bind(id)
+        .run();
+
+    if (
+      !result.meta?.changes
+    ) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Không tìm thấy lịch.",
+        },
+        404
+      );
+    }
+
+    await writeAudit(
+      env,
+      auth.session.user.id,
+      "ADMIN_DELETE_SCHEDULE",
+      `match:${id}`
+    );
+
+    return json({
+      ok: true,
+      message:
+        "Đã xóa lịch thi đấu.",
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể xóa lịch: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: REGISTERED TEAMS
+   ============================================================ */
+
+async function adminTeams(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const tournamentId =
+    Number(
+      url.searchParams.get(
+        "tournamentId"
+      )
+    );
+
+  if (
+    !Number.isInteger(
+      tournamentId
+    ) ||
+    tournamentId <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Thiếu tournamentId.",
+      },
+      400
+    );
+  }
+
+  try {
+    const result =
+      await env.DB
+        .prepare(`
+          SELECT
+            t.id,
+            t.name,
+            t.tag,
+            t.logo_url,
+            t.contact_email,
+            t.player2_email,
+            t.owner_id,
+            t.status,
+
+            u.email AS owner_email,
+
+            r.id AS registration_id,
+            r.order_code,
+            r.amount,
+            r.status AS registration_status
+
+          FROM registrations r
+
+          JOIN teams t
+            ON t.id = r.team_id
+
+          LEFT JOIN users u
+            ON u.id = t.owner_id
+
+          WHERE
+            r.tournament_id = ?
+
+          ORDER BY
+            r.id DESC
+
+          LIMIT 200
+        `)
+        .bind(
+          tournamentId
+        )
+        .all();
+
+    return json({
+      ok: true,
+
+      teams:
+        (
+          result.results ||
+          []
+        ).map(
+          row => ({
+            id:
+              Number(row.id),
+
+            name:
+              row.name,
+
+            tag:
+              row.tag ||
+              "",
+
+            logoUrl:
+              row.logo_url ||
+              "",
+
+            contactEmail:
+              row.contact_email ||
+              "",
+
+            player2Email:
+              row.player2_email ||
+              "",
+
+            ownerEmail:
+              row.owner_email ||
+              "",
+
+            registrationId:
+              Number(
+                row.registration_id
+              ),
+
+            orderCode:
+              row.order_code,
+
+            amount:
+              Number(
+                row.amount ||
+                0
+              ),
+
+            registrationStatus:
+              row.registration_status,
+
+            teamStatus:
+              row.status,
+          })
+        ),
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không lấy được danh sách team: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: RANKING LIST
+   ============================================================ */
+
+async function adminRanking(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const tournamentId =
+    Number(
+      url.searchParams.get(
+        "tournamentId"
+      )
+    );
+
+  if (
+    !Number.isInteger(
+      tournamentId
+    ) ||
+    tournamentId <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Thiếu tournamentId.",
+      },
+      400
+    );
+  }
+
+  try {
+    const result =
+      await env.DB
+        .prepare(`
+          SELECT
+            t.id AS team_id,
+            t.name AS team_name,
+            t.logo_url,
+
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN r.points IS NOT NULL
+                  THEN r.points
+                  ELSE 0
+                END
+              ),
+              0
+            ) AS points
+
+          FROM teams t
+
+          JOIN registrations reg
+            ON reg.team_id = t.id
+            AND reg.tournament_id = ?
+
+          LEFT JOIN results r
+            ON r.team_id = t.id
+
+          LEFT JOIN matches m
+            ON m.id = r.match_id
+            AND m.tournament_id = ?
+
+          WHERE
+            reg.status IN (
+              'PAID',
+              'CONFIRMED',
+              'APPROVED'
+            )
+
+            AND (
+              r.id IS NULL
+              OR m.id IS NOT NULL
+            )
+
+          GROUP BY
+            t.id,
+            t.name,
+            t.logo_url
+
+          ORDER BY
+            points DESC,
+            t.id ASC
+
+          LIMIT 100
+        `)
+        .bind(
+          tournamentId,
+          tournamentId
+        )
+        .all();
+
+    return json({
+      ok: true,
+
+      ranking:
+        (
+          result.results ||
+          []
+        ).map(
+          (row, index) => ({
+            rank:
+              index + 1,
+
+            teamId:
+              Number(
+                row.team_id
+              ),
+
+            teamName:
+              row.team_name,
+
+            logoUrl:
+              row.logo_url ||
+              "",
+
+            points:
+              Number(
+                row.points ||
+                0
+              ),
+          })
+        ),
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không lấy được BXH: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: FIND/CREATE RANKING MATCH
+   ============================================================ */
+
+async function getAdminRankingMatch(
+  env,
+  tournamentId
+) {
+  const existing =
+    await env.DB
+      .prepare(`
+        SELECT
+          id
+        FROM matches
+        WHERE
+          tournament_id = ?
+          AND status = 'RANKING'
+          AND room_id = 'ADMIN_RANKING'
+        ORDER BY id ASC
+        LIMIT 1
+      `)
+      .bind(
+        tournamentId
+      )
+      .first();
+
+  if (existing?.id) {
+    return Number(
+      existing.id
+    );
+  }
+
+  const result =
+    await env.DB
+      .prepare(`
+        INSERT INTO matches
+          (
+            tournament_id,
+            slot_id,
+            room_id,
+            room_password,
+            start_at,
+            status
+          )
+        VALUES
+          (
+            ?,
+            NULL,
+            'ADMIN_RANKING',
+            '',
+            ?,
+            'RANKING'
+          )
+      `)
+      .bind(
+        tournamentId,
+        new Date().toISOString()
+      )
+      .run();
+
+  const id =
+    result.meta
+      ?.last_row_id;
+
+  if (id) {
+    return Number(id);
+  }
+
+  const retry =
+    await env.DB
+      .prepare(`
+        SELECT id
+        FROM matches
+        WHERE
+          tournament_id = ?
+          AND status = 'RANKING'
+          AND room_id = 'ADMIN_RANKING'
+        ORDER BY id ASC
+        LIMIT 1
+      `)
+      .bind(
+        tournamentId
+      )
+      .first();
+
+  return retry?.id
+    ? Number(retry.id)
+    : null;
+}
+
+/* ============================================================
+   ADMIN: SAVE RANKING
+   ============================================================ */
+
+async function adminSaveRanking(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const data =
+    await bodyJson(request);
+
+  const tournamentId =
+    Number(
+      data.tournamentId
+    );
+
+  const teamId =
+    Number(
+      data.teamId
+    );
+
+  const points =
+    Math.max(
+      0,
+      Math.floor(
+        positiveNumber(
+          data.points,
+          0
+        )
+      )
+    );
+
+  const placement =
+    Math.max(
+      0,
+      Math.floor(
+        positiveNumber(
+          data.placement,
+          0
+        )
+      )
+    );
+
+  const kills =
+    Math.max(
+      0,
+      Math.floor(
+        positiveNumber(
+          data.kills,
+          0
+        )
+      )
+    );
+
+  if (
+    !Number.isInteger(
+      tournamentId
+    ) ||
+    tournamentId <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Giải đấu không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      teamId
+    ) ||
+    teamId <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Team không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  const registration =
+    await env.DB
+      .prepare(`
+        SELECT
+          r.id,
+          r.status
+        FROM registrations r
+        WHERE
+          r.tournament_id = ?
+          AND r.team_id = ?
+          AND r.status IN (
+            'PAID',
+            'CONFIRMED',
+            'APPROVED'
+          )
+        LIMIT 1
+      `)
+      .bind(
+        tournamentId,
+        teamId
+      )
+      .first();
+
+  if (!registration) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Team chưa có đăng ký thanh toán hợp lệ cho giải này.",
+      },
+      400
+    );
+  }
+
+  try {
+    const matchId =
+      await getAdminRankingMatch(
+        env,
+        tournamentId
+      );
+
+    if (!matchId) {
+      throw new Error(
+        "Không tạo được bảng BXH."
+      );
+    }
+
+    /*
+     * Mỗi team chỉ có một dòng
+     * trong bảng BXH ADMIN.
+     *
+     * Lưu điểm mới => xóa điểm cũ
+     * của team đó rồi thêm lại.
+     */
+
+    await env.DB
+      .prepare(`
+        DELETE FROM results
+        WHERE
+          match_id = ?
+          AND team_id = ?
+      `)
+      .bind(
+        matchId,
+        teamId
+      )
+      .run();
+
+    await env.DB
+      .prepare(`
+        INSERT INTO results
+          (
+            match_id,
+            team_id,
+            placement,
+            kills,
+            points
+          )
+        VALUES
+          (?, ?, ?, ?, ?)
+      `)
+      .bind(
+        matchId,
+        teamId,
+        placement,
+        kills,
+        points
+      )
+      .run();
+
+    await writeAudit(
+      env,
+      auth.session.user.id,
+      "ADMIN_SAVE_RANKING",
+      `team:${teamId}`,
+      {
+        tournamentId,
+        teamId,
+        points,
+        placement,
+        kills,
+      }
+    );
+
+    return json({
+      ok: true,
+
+      message:
+        "Đã cập nhật BXH.",
+
+      teamId,
+
+      points,
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể cập nhật BXH: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: CREATE ADMIN ACCOUNT
+   ============================================================ */
+
+async function adminCreateAdmin(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const data =
+    await bodyJson(request);
+
+  const newEmail =
+    email(data.email);
+
+  const password =
+    String(
+      data.password ||
+      ""
+    );
+
+  if (
+    !validEmail(
+      newEmail
+    )
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Email admin không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  if (
+    password.length < 6
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Mật khẩu admin phải có ít nhất 6 ký tự.",
+      },
+      400
+    );
+  }
+
+  const exists =
+    await env.DB
+      .prepare(`
+        SELECT
+          id,
+          role
+        FROM users
+        WHERE email = ?
+        LIMIT 1
+      `)
+      .bind(
+        newEmail
+      )
+      .first();
+
+  if (exists) {
+    return json(
+      {
+        ok: false,
+        error:
+          exists.role === "ADMIN" ||
+          exists.role === "SUPER_ADMIN"
+            ? "Tài khoản này đã là admin."
+            : "Email này đã tồn tại trong hệ thống.",
+      },
+      409
+    );
+  }
+
+  try {
+    const passwordData =
+      await makePassword(
+        password
+      );
+
+    const result =
+      await env.DB
+        .prepare(`
+          INSERT INTO users
+            (
+              email,
+              password_hash,
+              password_salt,
+              role,
+              status
+            )
+          VALUES
+            (?, ?, ?, 'ADMIN', 'ACTIVE')
+        `)
+        .bind(
+          newEmail,
+          passwordData.hash,
+          passwordData.salt
+        )
+        .run();
+
+    const userId =
+      result.meta
+        ?.last_row_id;
+
+    await writeAudit(
+      env,
+      auth.session.user.id,
+      "ADMIN_CREATE_ADMIN",
+      userId
+        ? `user:${userId}`
+        : null,
+      {
+        email:
+          newEmail,
+      }
+    );
+
+    return json(
+      {
+        ok: true,
+        message:
+          "Đã tạo tài khoản admin.",
+      },
+      201
+    );
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể tạo admin: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN ROUTER
+   ============================================================ */
+
+async function adminApi(
+  request,
+  env
+) {
+  const url =
+    new URL(request.url);
+
+  const path =
+    url.pathname;
+
+  const method =
+    request.method
+      .toUpperCase();
+
+  if (
+    path ===
+      "/api/admin/me" &&
+    method === "GET"
+  ) {
+    return adminMe(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/tournaments" &&
+    method === "GET"
+  ) {
+    return adminTournaments(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/tournaments" &&
+    method === "POST"
+  ) {
+    return adminCreateTournament(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/tournaments" &&
+    method === "PUT"
+  ) {
+    return adminUpdateTournament(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/schedules" &&
+    method === "GET"
+  ) {
+    return adminSchedules(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/schedules" &&
+    method === "POST"
+  ) {
+    return adminCreateSchedule(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/schedules" &&
+    method === "PUT"
+  ) {
+    return adminUpdateSchedule(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/schedules" &&
+    method === "DELETE"
+  ) {
+    return adminDeleteSchedule(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/teams" &&
+    method === "GET"
+  ) {
+    return adminTeams(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/ranking" &&
+    method === "GET"
+  ) {
+    return adminRanking(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/ranking" &&
+    method === "POST"
+  ) {
+    return adminSaveRanking(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/admins" &&
+    method === "POST"
+  ) {
+    return adminCreateAdmin(
+      request,
+      env
+    );
+  }
+
+  return json(
+    {
+      ok: false,
+      error:
+        "Admin API không tồn tại.",
+    },
+    404
+  );
 }
 
 /* ============================================================
@@ -2105,7 +4405,7 @@ async function cleanupSessions(
 }
 
 /* ============================================================
-   ROUTER
+   MAIN API ROUTER
    ============================================================ */
 
 async function api(
@@ -2122,6 +4422,25 @@ async function api(
     request.method
       .toUpperCase();
 
+  /*
+   * ADMIN API
+   */
+
+  if (
+    path.startsWith(
+      "/api/admin/"
+    )
+  ) {
+    return adminApi(
+      request,
+      env
+    );
+  }
+
+  /*
+   * HEALTH
+   */
+
   if (
     path ===
       "/api/health" &&
@@ -2129,6 +4448,10 @@ async function api(
   ) {
     return health(env);
   }
+
+  /*
+   * AUTH
+   */
 
   if (
     path ===
@@ -2174,6 +4497,10 @@ async function api(
     );
   }
 
+  /*
+   * PUBLIC TOURNAMENT
+   */
+
   if (
     path ===
       "/api/tournament" &&
@@ -2184,6 +4511,10 @@ async function api(
       env
     );
   }
+
+  /*
+   * PUBLIC TEAM REGISTER
+   */
 
   if (
     path ===
@@ -2196,6 +4527,10 @@ async function api(
     );
   }
 
+  /*
+   * PUBLIC RANKING
+   */
+
   if (
     path ===
       "/api/ranking" &&
@@ -2206,6 +4541,10 @@ async function api(
       env
     );
   }
+
+  /*
+   * PAYMENT WEBHOOK
+   */
 
   if (
     path ===
@@ -2241,11 +4580,29 @@ export default {
     const url =
       new URL(request.url);
 
+    /*
+     * API
+     */
+
     if (
       url.pathname.startsWith(
         "/api/"
       )
     ) {
+      /*
+       * Cleanup session nhẹ,
+       * không chặn request.
+       */
+      if (
+        ctx?.waitUntil
+      ) {
+        ctx.waitUntil(
+          cleanupSessions(
+            env
+          )
+        );
+      }
+
       return api(
         request,
         env
@@ -2253,9 +4610,49 @@ export default {
     }
 
     /*
-     * Các file public:
+     * ADMIN PAGE
+     *
+     * /admin
+     * sẽ mở:
+     * public/admin.html
+     *
+     * Quyền admin vẫn được
+     * kiểm tra ở API server-side.
+     */
+
+    if (
+      url.pathname ===
+        "/admin" ||
+      url.pathname ===
+        "/admin/"
+    ) {
+      if (env.ASSETS) {
+        const adminUrl =
+          new URL(
+            "/admin.html",
+            request.url
+          );
+
+        return env.ASSETS.fetch(
+          new Request(
+            adminUrl.toString(),
+            request
+          )
+        );
+      }
+
+      return text(
+        "Không tìm thấy trang Admin.",
+        404
+      );
+    }
+
+    /*
+     * PUBLIC FILES
+     *
      * public/index.html
-     * public/...
+     * public/admin.html
+     * ...
      */
 
     if (env.ASSETS) {
