@@ -2,11 +2,9 @@
  * =========================================================
  * GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1
  *
- * Cloudflare Worker
- * Cloudflare D1
- * Web Crypto
+ * Cloudflare Worker + D1 + Web Crypto
  *
- * DATABASE:
+ * DATABASE CHÍNH:
  *   users
  *   teams
  *   team_members
@@ -23,6 +21,7 @@
  *   app_sessions
  *   app_teams
  *   app_tournaments
+ *   app_*
  * =========================================================
  */
 
@@ -32,6 +31,9 @@ const SESSION_TTL_SECONDS =
   60 * 60 * 24 * 30;
 
 const SESSION_COOKIE = "vtc_session";
+
+const DEFAULT_SITE_NAME =
+  "GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -96,22 +98,45 @@ async function api(request, env, url) {
     });
   }
 
+  /* -------------------------------------------------------
+     HEALTH
+  ------------------------------------------------------- */
+
   if (
     url.pathname === "/api/health" &&
     method === "GET"
   ) {
+    let database = false;
+
+    try {
+      if (env.DB) {
+        await env.DB
+          .prepare("SELECT 1 AS ok")
+          .first();
+
+        database = true;
+      }
+    } catch {
+      database = false;
+    }
+
     return json(
       {
         ok: true,
         site:
           env.SITE_NAME ||
-          "GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1",
+          DEFAULT_SITE_NAME,
+        database,
       },
       200,
       null,
       request
     );
   }
+
+  /* -------------------------------------------------------
+     AUTH
+  ------------------------------------------------------- */
 
   if (
     url.pathname === "/api/auth/register" &&
@@ -141,12 +166,20 @@ async function api(request, env, url) {
     return handleMe(request, env);
   }
 
+  /* -------------------------------------------------------
+     TOURNAMENT
+  ------------------------------------------------------- */
+
   if (
     url.pathname === "/api/tournament" &&
     method === "GET"
   ) {
     return handleTournament(request, env);
   }
+
+  /* -------------------------------------------------------
+     TEAM
+  ------------------------------------------------------- */
 
   if (
     url.pathname === "/api/team/register" &&
@@ -155,12 +188,20 @@ async function api(request, env, url) {
     return handleTeamRegister(request, env);
   }
 
+  /* -------------------------------------------------------
+     RANKING
+  ------------------------------------------------------- */
+
   if (
     url.pathname === "/api/ranking" &&
     method === "GET"
   ) {
     return handleRanking(request, env);
   }
+
+  /* -------------------------------------------------------
+     PAYMENT WEBHOOK
+  ------------------------------------------------------- */
 
   if (
     url.pathname === "/api/payment/webhook" &&
@@ -199,6 +240,16 @@ async function handleRegister(request, env) {
 
   const data = await readJson(request);
 
+  /*
+   * FORM ĐĂNG KÝ CHÍNH THỨC:
+   *
+   * email
+   * password
+   * confirmPassword
+   *
+   * KHÔNG bắt buộc username.
+   */
+
   const email = normalizeEmail(data.email);
 
   const password = String(
@@ -213,7 +264,7 @@ async function handleRegister(request, env) {
   );
 
   /* -------------------------------------------------------
-     EMAIL
+     VALIDATE EMAIL
   ------------------------------------------------------- */
 
   if (!isEmail(email)) {
@@ -229,7 +280,7 @@ async function handleRegister(request, env) {
   }
 
   /* -------------------------------------------------------
-     PASSWORD
+     VALIDATE PASSWORD
   ------------------------------------------------------- */
 
   if (password.length < 6) {
@@ -304,17 +355,23 @@ async function handleRegister(request, env) {
     bytesToB64Url(salt);
 
   /*
-   * Tài khoản người chơi:
-   * PLAYER
+   * username chỉ là dữ liệu nội bộ.
    *
-   * Không dùng USER.
+   * Người dùng KHÔNG nhập username.
+   *
+   * Ví dụ:
+   * abc@gmail.com
+   * -> abc
+   *
+   * Nếu trùng:
+   * abc_123
    */
 
-  const role = "PLAYER";
-
-  /* -------------------------------------------------------
-     INSERT USER
-  ------------------------------------------------------- */
+  const username =
+    await createInternalUsername(
+      env.DB,
+      email
+    );
 
   let result;
 
@@ -323,6 +380,7 @@ async function handleRegister(request, env) {
       .prepare(
         `INSERT INTO users
          (
+           username,
            email,
            password_hash,
            password_salt,
@@ -330,13 +388,13 @@ async function handleRegister(request, env) {
            balance,
            created_at
          )
-         VALUES (?, ?, ?, ?, 0, ?)`
+         VALUES (?, ?, ?, ?, 'PLAYER', 0, ?)`
       )
       .bind(
+        username,
         email,
         passwordHash,
         passwordSalt,
-        role,
         new Date().toISOString()
       )
       .run();
@@ -386,7 +444,7 @@ async function handleRegister(request, env) {
   );
 
   /*
-   * Đăng ký xong tạo session luôn.
+   * Đăng ký thành công -> tạo session luôn.
    *
    * Frontend có thể chuyển thẳng
    * sang trạng thái tài khoản.
@@ -402,13 +460,81 @@ async function handleRegister(request, env) {
       ok: true,
       message:
         "Tạo tài khoản thành công.",
-      authenticated: true,
       user: publicUser(user),
     },
     200,
     session.cookie,
     request
   );
+}
+
+/* =========================================================
+   CREATE INTERNAL USERNAME
+========================================================= */
+
+async function createInternalUsername(db, email) {
+  const localPart =
+    String(email.split("@")[0] || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "")
+      .slice(0, 24) || "player";
+
+  let username = localPart;
+
+  const first = await db
+    .prepare(
+      `SELECT id
+       FROM users
+       WHERE lower(username) = lower(?)
+       LIMIT 1`
+    )
+    .bind(username)
+    .first();
+
+  if (!first) {
+    return username;
+  }
+
+  /*
+   * Nếu username đã tồn tại,
+   * thêm hậu tố ngẫu nhiên.
+   */
+
+  for (let i = 0; i < 5; i++) {
+    const suffix = bytesToB64Url(
+      randomBytes(4)
+    )
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 6)
+      .toLowerCase();
+
+    username =
+      `${localPart}_${suffix}`;
+
+    const exists = await db
+      .prepare(
+        `SELECT id
+         FROM users
+         WHERE lower(username) = lower(?)
+         LIMIT 1`
+      )
+      .bind(username)
+      .first();
+
+    if (!exists) {
+      return username;
+    }
+  }
+
+  /*
+   * Fallback cuối cùng.
+   */
+
+  return (
+    localPart +
+    "_" +
+    Date.now().toString(36)
+  ).slice(0, 30);
 }
 
 /* =========================================================
@@ -507,7 +633,6 @@ async function handleLogin(request, env) {
       ok: true,
       message:
         "Đăng nhập thành công.",
-      authenticated: true,
       user: publicUser(user),
     },
     200,
@@ -520,10 +645,7 @@ async function handleLogin(request, env) {
    LOGOUT
 ========================================================= */
 
-async function handleLogout(
-  request,
-  env
-) {
+async function handleLogout(request, env) {
   if (!env.DB) {
     return json(
       {
@@ -556,7 +678,6 @@ async function handleLogout(
     {
       ok: true,
       message: "Đã đăng xuất.",
-      authenticated: false,
     },
     200,
     deleteCookieHeader(),
@@ -568,10 +689,7 @@ async function handleLogout(
    CURRENT USER
 ========================================================= */
 
-async function handleMe(
-  request,
-  env
-) {
+async function handleMe(request, env) {
   if (!env.DB) {
     return json(
       {
@@ -616,13 +734,10 @@ async function handleMe(
 }
 
 /* =========================================================
-   USER
+   USER HELPERS
 ========================================================= */
 
-async function findUserById(
-  db,
-  id
-) {
+async function findUserById(db, id) {
   if (
     id === null ||
     id === undefined
@@ -668,6 +783,10 @@ function normalizeUserRow(row) {
   return {
     id: Number(row.id),
 
+    username: String(
+      row.username || ""
+    ),
+
     email: String(
       row.email || ""
     ),
@@ -697,21 +816,17 @@ function publicUser(user) {
   return {
     id: user.id,
 
-    /*
-     * Không còn username.
-     *
-     * Frontend có thể dùng email
-     * để hiển thị tài khoản.
-     */
+    username:
+      user.username || "",
 
-    email: user.email,
+    email:
+      user.email,
 
-    role: user.role,
+    role:
+      user.role,
 
     balance:
-      Number.isFinite(
-        user.balance
-      )
+      Number.isFinite(user.balance)
         ? user.balance
         : 0,
   };
@@ -760,7 +875,7 @@ async function verifyStoredPassword(
   password
 ) {
   /*
-   * Format mới:
+   * FORMAT MỚI
    *
    * password_hash = base64url(hash)
    * password_salt = base64url(salt)
@@ -781,8 +896,8 @@ async function verifyStoredPassword(
       );
 
     if (
-      salt.length &&
-      expected.length
+      salt.length > 0 &&
+      expected.length > 0
     ) {
       const actual =
         await hashPassword(
@@ -799,7 +914,7 @@ async function verifyStoredPassword(
   }
 
   /*
-   * Hỗ trợ format cũ:
+   * FORMAT CŨ
    *
    * pbkdf2$100000$salt$hash
    */
@@ -808,35 +923,28 @@ async function verifyStoredPassword(
     user.passwordHash;
 
   if (
-    stored.startsWith(
-      "pbkdf2$"
-    )
+    stored &&
+    stored.startsWith("pbkdf2$")
   ) {
     const parts =
       stored.split("$");
 
-    if (
-      parts.length === 4
-    ) {
+    if (parts.length === 4) {
       const iterations =
         Number(parts[1]);
 
       const salt =
-        b64UrlToBytes(
-          parts[2]
-        );
+        b64UrlToBytes(parts[2]);
 
       const expected =
-        b64UrlToBytes(
-          parts[3]
-        );
+        b64UrlToBytes(parts[3]);
 
       if (
         iterations > 0 &&
         iterations <=
           PBKDF2_ITERATIONS &&
-        salt.length &&
-        expected.length
+        salt.length > 0 &&
+        expected.length > 0
       ) {
         const actual =
           await hashPassword(
@@ -894,6 +1002,7 @@ async function createSession(
 
   return {
     token,
+
     cookie:
       sessionCookie(token),
   };
@@ -980,6 +1089,18 @@ async function handleTournament(
   request,
   env
 ) {
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error: "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
+
   const tournament =
     await getOrCreateTournament(
       env
@@ -989,8 +1110,7 @@ async function handleTournament(
     return json(
       {
         ok: false,
-        error:
-          "Chưa có giải đấu.",
+        error: "Chưa có giải đấu.",
       },
       500,
       null,
@@ -1011,20 +1131,19 @@ async function handleTournament(
              'CONFIRMED'
            )`
       )
-      .bind(
-        tournament.id
-      )
+      .bind(tournament.id)
       .first();
 
   const registered =
-    Number(
-      count?.count || 0
-    );
+    Number(count?.count || 0);
 
   const maxTeams =
     Number(
       tournament.max_teams || 48
     );
+
+  const full =
+    registered >= maxTeams;
 
   return json(
     {
@@ -1032,9 +1151,7 @@ async function handleTournament(
 
       tournament: {
         id:
-          Number(
-            tournament.id
-          ),
+          Number(tournament.id),
 
         name:
           tournament.name,
@@ -1044,9 +1161,7 @@ async function handleTournament(
           "",
 
         fee:
-          Number(
-            tournament.fee || 0
-          ),
+          Number(tournament.fee || 0),
 
         maxTeams,
 
@@ -1060,17 +1175,12 @@ async function handleTournament(
           ),
 
         status:
-          registered >=
-          maxTeams
+          full
             ? "FULL"
-            : String(
-                tournament.status ||
-                  "OPEN"
-              ).toUpperCase(),
+            : tournament.status,
 
         statusText:
-          registered >=
-          maxTeams
+          full
             ? "ĐÃ ĐỦ SLOT"
             : "CÒN SLOT",
 
@@ -1095,7 +1205,7 @@ async function handleTournament(
 async function getOrCreateTournament(
   env
 ) {
-  let tournament =
+  const existing =
     await env.DB
       .prepare(
         `SELECT *
@@ -1105,14 +1215,12 @@ async function getOrCreateTournament(
       )
       .first();
 
-  if (tournament) {
-    return tournament;
+  if (existing) {
+    return existing;
   }
 
   const fee =
-    Number(
-      env.ENTRY_FEE || 0
-    );
+    Number(env.ENTRY_FEE || 0);
 
   await env.DB
     .prepare(
@@ -1122,30 +1230,30 @@ async function getOrCreateTournament(
          fee,
          max_teams,
          status,
-         description
+         description,
+         created_at
        )
-       VALUES (?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
     .bind(
-      "GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1",
+      env.SITE_NAME ||
+        DEFAULT_SITE_NAME,
       fee,
       48,
       "OPEN",
-      "Giải đấu Vua Tử Chiến – Mùa 1."
+      "Giải đấu Vua Tử Chiến – Mùa 1.",
+      new Date().toISOString()
     )
     .run();
 
-  tournament =
-    await env.DB
-      .prepare(
-        `SELECT *
-         FROM tournaments
-         ORDER BY id ASC
-         LIMIT 1`
-      )
-      .first();
-
-  return tournament;
+  return env.DB
+    .prepare(
+      `SELECT *
+       FROM tournaments
+       ORDER BY id ASC
+       LIMIT 1`
+    )
+    .first();
 }
 
 /* =========================================================
@@ -1160,8 +1268,7 @@ async function handleTeamRegister(
     return json(
       {
         ok: false,
-        error:
-          "D1 DB chưa được cấu hình.",
+        error: "D1 DB chưa được cấu hình.",
       },
       500,
       null,
@@ -1205,19 +1312,16 @@ async function handleTeamRegister(
 
   const logoUrl =
     String(
-      data.logoUrl || ""
+      data.logoUrl ||
+        data.logo ||
+        ""
     ).trim();
 
   const contactEmail =
     normalizeEmail(
       data.contactEmail ||
+        data.email ||
         user.email
-    );
-
-  const player2Email =
-    normalizeEmail(
-      data.player2Email ||
-        ""
     );
 
   if (
@@ -1249,22 +1353,6 @@ async function handleTeamRegister(
     );
   }
 
-  if (
-    player2Email &&
-    !isEmail(player2Email)
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Email thành viên 2 không hợp lệ.",
-      },
-      400,
-      null,
-      request
-    );
-  }
-
   const tournament =
     await getOrCreateTournament(
       env
@@ -1287,7 +1375,7 @@ async function handleTeamRegister(
     String(
       tournament.status
     ).toUpperCase() !==
-      "OPEN"
+    "OPEN"
   ) {
     return json(
       {
@@ -1302,7 +1390,7 @@ async function handleTeamRegister(
   }
 
   /* -------------------------------------------------------
-     COUNT REGISTRATIONS
+     COUNT REGISTERED
   ------------------------------------------------------- */
 
   const count =
@@ -1318,20 +1406,15 @@ async function handleTeamRegister(
              'CONFIRMED'
            )`
       )
-      .bind(
-        tournament.id
-      )
+      .bind(tournament.id)
       .first();
 
   const registered =
-    Number(
-      count?.count || 0
-    );
+    Number(count?.count || 0);
 
   const maxTeams =
     Number(
-      tournament.max_teams ||
-        48
+      tournament.max_teams || 48
     );
 
   if (
@@ -1350,7 +1433,7 @@ async function handleTeamRegister(
   }
 
   /* -------------------------------------------------------
-     DUPLICATE USER
+     CHECK USER ALREADY REGISTERED
   ------------------------------------------------------- */
 
   const duplicate =
@@ -1386,10 +1469,10 @@ async function handleTeamRegister(
   }
 
   /* -------------------------------------------------------
-     TEAM
+     CREATE TEAM
   ------------------------------------------------------- */
 
-  let teamId;
+  let teamId = 0;
 
   try {
     const teamResult =
@@ -1401,15 +1484,17 @@ async function handleTeamRegister(
              name,
              tag,
              logo_url,
-             status
+             status,
+             created_at
            )
-           VALUES (?, ?, ?, ?, 'PENDING')`
+           VALUES (?, ?, ?, ?, 'PENDING', ?)`
         )
         .bind(
           user.id,
           teamName,
           tag || null,
-          logoUrl || null
+          logoUrl || null,
+          new Date().toISOString()
         )
         .run();
 
@@ -1437,7 +1522,7 @@ async function handleTeamRegister(
   }
 
   /* -------------------------------------------------------
-     MEMBER #1
+     TEAM OWNER
   ------------------------------------------------------- */
 
   try {
@@ -1454,52 +1539,16 @@ async function handleTeamRegister(
       )
       .bind(
         teamId,
-        user.email,
+        user.username ||
+          user.email,
         ""
       )
       .run();
-
-    /* -----------------------------------------------------
-       MEMBER #2
-    ----------------------------------------------------- */
-
-    if (player2Email) {
-      await env.DB
-        .prepare(
-          `INSERT INTO team_members
-           (
-             team_id,
-             game_name,
-             uid,
-             role
-           )
-           VALUES (?, ?, ?, 'PLAYER')`
-        )
-        .bind(
-          teamId,
-          player2Email,
-          ""
-        )
-        .run();
-    }
   } catch (error) {
-    await env.DB
-      .prepare(
-        `DELETE FROM team_members
-         WHERE team_id = ?`
-      )
-      .bind(teamId)
-      .run()
-      .catch(() => {});
-
-    await env.DB
-      .prepare(
-        `DELETE FROM teams
-         WHERE id = ?`
-      )
-      .bind(teamId)
-      .run()
-      .catch(() => {});
+    await deleteTeamCompletely(
+      env.DB,
+      teamId
+    );
 
     return json(
       {
@@ -1526,7 +1575,7 @@ async function handleTeamRegister(
       tournament.fee || 0
     );
 
-  let registrationId;
+  let registrationId = 0;
 
   try {
     const registrationResult =
@@ -1539,15 +1588,17 @@ async function handleTeamRegister(
              slot_id,
              order_code,
              amount,
-             status
+             status,
+             created_at
            )
-           VALUES (?, ?, NULL, ?, ?, 'AWAITING_PAYMENT')`
+           VALUES (?, ?, NULL, ?, ?, 'AWAITING_PAYMENT', ?)`
         )
         .bind(
           teamId,
           tournament.id,
           orderCode,
-          amount
+          amount,
+          new Date().toISOString()
         )
         .run();
 
@@ -1557,23 +1608,10 @@ async function handleTeamRegister(
           ?.last_row_id
       );
   } catch (error) {
-    await env.DB
-      .prepare(
-        `DELETE FROM team_members
-         WHERE team_id = ?`
-      )
-      .bind(teamId)
-      .run()
-      .catch(() => {});
-
-    await env.DB
-      .prepare(
-        `DELETE FROM teams
-         WHERE id = ?`
-      )
-      .bind(teamId)
-      .run()
-      .catch(() => {});
+    await deleteTeamCompletely(
+      env.DB,
+      teamId
+    );
 
     return json(
       {
@@ -1602,16 +1640,23 @@ async function handleTeamRegister(
            external_id,
            amount,
            status,
-           raw_json
+           raw_json,
+           created_at
          )
-         VALUES (?, 'BANK', NULL, ?, 'PENDING', NULL)`
+         VALUES (?, 'BANK', NULL, ?, 'PENDING', NULL, ?)`
       )
       .bind(
         registrationId,
-        amount
+        amount,
+        new Date().toISOString()
       )
       .run();
   } catch (error) {
+    /*
+     * Không rollback registration.
+     * Có thể tạo payment lại sau.
+     */
+
     console.error(
       "PAYMENT INSERT ERROR:",
       error
@@ -1636,11 +1681,13 @@ async function handleTeamRegister(
       team: {
         id: teamId,
 
-        name:
-          teamName,
+        name: teamName,
 
-        tag:
-          tag,
+        tag,
+
+        logoUrl,
+
+        contactEmail,
 
         registrationId,
 
@@ -1659,6 +1706,38 @@ async function handleTeamRegister(
 }
 
 /* =========================================================
+   DELETE TEAM COMPLETELY
+========================================================= */
+
+async function deleteTeamCompletely(
+  db,
+  teamId
+) {
+  /*
+   * Dùng khi một bước trong quá trình
+   * tạo team thất bại.
+   */
+
+  await db
+    .prepare(
+      `DELETE FROM team_members
+       WHERE team_id = ?`
+    )
+    .bind(teamId)
+    .run()
+    .catch(() => {});
+
+  await db
+    .prepare(
+      `DELETE FROM teams
+       WHERE id = ?`
+    )
+    .bind(teamId)
+    .run()
+    .catch(() => {});
+}
+
+/* =========================================================
    RANKING
 ========================================================= */
 
@@ -1666,6 +1745,18 @@ async function handleRanking(
   request,
   env
 ) {
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        ranking: [],
+      },
+      500,
+      null,
+      request
+    );
+  }
+
   const tournament =
     await getOrCreateTournament(
       env
@@ -1674,7 +1765,7 @@ async function handleRanking(
   if (!tournament) {
     return json(
       {
-        ok: false,
+        ok: true,
         ranking: [],
       },
       200,
@@ -1738,52 +1829,47 @@ async function handleRanking(
 
          LIMIT 100`
       )
-      .bind(
-        tournament.id
-      )
+      .bind(tournament.id)
       .all();
 
   const ranking =
-    (
-      rows.results || []
-    ).map(
-      (row, index) => ({
-        rank:
-          index + 1,
-
-        teamName:
-          row.name,
-
-        logoUrl:
-          row.logo_url || "",
-
-        points:
-          Number(
-            row.points || 0
-          ),
-
-        wins:
-          Number(
-            row.wins || 0
-          ),
-
-        matches:
+    (rows.results || [])
+      .map((row, index) => {
+        const matches =
           Number(
             row.matches || 0
-          ),
+          );
 
-        losses:
-          Math.max(
-            0,
+        const wins =
+          Number(
+            row.wins || 0
+          );
+
+        return {
+          rank: index + 1,
+
+          teamName:
+            row.name,
+
+          logoUrl:
+            row.logo_url || "",
+
+          points:
             Number(
-              row.matches || 0
-            ) -
-              Number(
-                row.wins || 0
-              )
-          ),
-      })
-    );
+              row.points || 0
+            ),
+
+          wins,
+
+          matches,
+
+          losses:
+            Math.max(
+              0,
+              matches - wins
+            ),
+        };
+      });
 
   return json(
     {
@@ -1804,6 +1890,18 @@ async function handlePaymentWebhook(
   request,
   env
 ) {
+  if (!env.DB) {
+    return json(
+      {
+        ok: false,
+        error: "D1 DB chưa được cấu hình.",
+      },
+      500,
+      null,
+      request
+    );
+  }
+
   const secret =
     env.PAYMENT_WEBHOOK_SECRET;
 
@@ -1865,8 +1963,19 @@ async function handlePaymentWebhook(
     String(
       data.reference ||
         data.transactionId ||
+        data.externalId ||
         ""
-    );
+    ).trim();
+
+  /*
+   * amount là optional vì mỗi provider
+   * có format webhook khác nhau.
+   */
+
+  const webhookAmount =
+    data.amount !== undefined
+      ? Number(data.amount)
+      : null;
 
   if (
     ![
@@ -1887,6 +1996,10 @@ async function handlePaymentWebhook(
       request
     );
   }
+
+  /* -------------------------------------------------------
+     FIND REGISTRATION
+  ------------------------------------------------------- */
 
   if (
     !registrationId &&
@@ -1947,6 +2060,29 @@ async function handlePaymentWebhook(
     );
   }
 
+  /*
+   * Nếu provider gửi amount,
+   * kiểm tra amount trước khi xác nhận.
+   */
+
+  if (
+    Number.isFinite(webhookAmount) &&
+    webhookAmount >= 0 &&
+    webhookAmount !==
+      Number(registration.amount)
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Số tiền thanh toán không khớp.",
+      },
+      400,
+      null,
+      request
+    );
+  }
+
   /* -------------------------------------------------------
      REGISTRATION STATUS
   ------------------------------------------------------- */
@@ -1962,9 +2098,7 @@ async function handlePaymentWebhook(
       "CONFIRMED";
   }
 
-  if (
-    status === "FAILED"
-  ) {
+  if (status === "FAILED") {
     registrationStatus =
       "FAILED";
   }
@@ -1994,9 +2128,7 @@ async function handlePaymentWebhook(
          ORDER BY id DESC
          LIMIT 1`
       )
-      .bind(
-        registrationId
-      )
+      .bind(registrationId)
       .first();
 
   if (payment) {
@@ -2026,9 +2158,10 @@ async function handlePaymentWebhook(
            external_id,
            amount,
            status,
-           raw_json
+           raw_json,
+           created_at
          )
-         VALUES (?, 'BANK', ?, ?, ?, ?)`
+         VALUES (?, 'BANK', ?, ?, ?, ?, ?)`
       )
       .bind(
         registrationId,
@@ -2037,13 +2170,14 @@ async function handlePaymentWebhook(
           registration.amount || 0
         ),
         status,
-        JSON.stringify(data)
+        JSON.stringify(data),
+        new Date().toISOString()
       )
       .run();
   }
 
   /* -------------------------------------------------------
-     TEAM
+     TEAM STATUS
   ------------------------------------------------------- */
 
   const teamStatus =
@@ -2102,6 +2236,9 @@ async function handlePaymentWebhook(
       status,
 
       registrationStatus,
+
+      paymentStatus:
+        status,
     },
     200,
     null,
@@ -2142,6 +2279,11 @@ async function writeAudit(
       )
       .run();
   } catch (error) {
+    /*
+     * Audit lỗi không được làm
+     * login/register/payment chết.
+     */
+
     console.error(
       "AUDIT ERROR:",
       error
@@ -2154,9 +2296,7 @@ async function writeAudit(
 ========================================================= */
 
 function normalizeEmail(value) {
-  return String(
-    value || ""
-  )
+  return String(value || "")
     .trim()
     .toLowerCase();
 }
@@ -2196,17 +2336,12 @@ function randomBytes(length) {
   const bytes =
     new Uint8Array(length);
 
-  crypto.getRandomValues(
-    bytes
-  );
+  crypto.getRandomValues(bytes);
 
   return bytes;
 }
 
-function timingSafeEqual(
-  a,
-  b
-) {
+function timingSafeEqual(a, b) {
   if (
     !(a instanceof Uint8Array) ||
     !(b instanceof Uint8Array) ||
@@ -2229,10 +2364,7 @@ function timingSafeEqual(
   return result === 0;
 }
 
-function timingSafeStringEqual(
-  a,
-  b
-) {
+function timingSafeStringEqual(a, b) {
   return timingSafeEqual(
     new TextEncoder().encode(a),
     new TextEncoder().encode(b)
@@ -2242,13 +2374,10 @@ function timingSafeStringEqual(
 function bytesToB64Url(bytes) {
   let binary = "";
 
-  for (
-    const byte of bytes
-  ) {
-    binary +=
-      String.fromCharCode(
-        byte
-      );
+  for (const byte of bytes) {
+    binary += String.fromCharCode(
+      byte
+    );
   }
 
   return btoa(binary)
@@ -2261,21 +2390,14 @@ function b64UrlToBytes(value) {
   try {
     const normalized =
       String(value)
-        .replace(
-          /-/g,
-          "+"
-        )
-        .replace(
-          /_/g,
-          "/"
-        );
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
 
     const padded =
       normalized +
       "=".repeat(
         (4 -
-          (normalized.length %
-            4)) %
+          (normalized.length % 4)) %
           4
       );
 
@@ -2305,7 +2427,17 @@ async function readJson(request) {
   }
 
   try {
-    return JSON.parse(text);
+    const data =
+      JSON.parse(text);
+
+    if (
+      !data ||
+      typeof data !== "object"
+    ) {
+      return {};
+    }
+
+    return data;
   } catch {
     throw new Error(
       "Dữ liệu gửi lên không phải JSON hợp lệ."
@@ -2332,7 +2464,9 @@ function safeError(error) {
 
 function sessionCookie(token) {
   return (
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}` +
+    `${SESSION_COOKIE}=${encodeURIComponent(
+      token
+    )}` +
     `; Max-Age=${SESSION_TTL_SECONDS}` +
     `; Path=/` +
     `; HttpOnly` +
@@ -2352,10 +2486,7 @@ function deleteCookieHeader() {
   );
 }
 
-function getCookie(
-  request,
-  name
-) {
+function getCookie(request, name) {
   const raw =
     request.headers.get(
       "Cookie"
@@ -2421,13 +2552,12 @@ function corsHeaders(request) {
 
   headers[
     "access-control-allow-methods"
-  ] =
-    "GET,POST,OPTIONS";
+  ] = "GET,POST,OPTIONS";
 
   headers[
     "access-control-allow-headers"
   ] =
-    "Content-Type, Authorization";
+    "Content-Type, Authorization, X-Webhook-Secret";
 
   return headers;
 }
@@ -2439,9 +2569,7 @@ function json(
   request = null
 ) {
   const headers =
-    new Headers(
-      JSON_HEADERS
-    );
+    new Headers(JSON_HEADERS);
 
   if (cookie) {
     headers.append(
@@ -2451,10 +2579,7 @@ function json(
   }
 
   for (
-    const [
-      key,
-      value,
-    ] of Object.entries(
+    const [key, value] of Object.entries(
       corsHeaders(request)
     )
   ) {
