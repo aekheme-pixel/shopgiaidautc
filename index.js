@@ -91,6 +91,11 @@ const SESSION_TTL_MS =
   30 * 24 * 60 * 60 * 1000;
 
 const PBKDF2_ITERATIONS = 100000;
+
+/*
+ * PHÍ THAM GIA CHÍNH THỨC
+ * 30.000 VNĐ
+ */
 const TEAM_ENTRY_FEE = 30000;
 
 /* ============================================================
@@ -751,6 +756,43 @@ async function health(env) {
       500
     );
   }
+}
+
+/* ============================================================
+   HEALTH – SEPAY
+   ============================================================
+   Chỉ kiểm tra Worker có nhìn thấy Secret hay không.
+   KHÔNG BAO GIỜ trả Secret Key ra response.
+   ============================================================ */
+
+async function sepayHealth(env) {
+  const configured =
+    typeof env.SEPAY_WEBHOOK_SECRET ===
+      "string" &&
+    env.SEPAY_WEBHOOK_SECRET.trim()
+      .length > 0;
+
+  const bankConfigured =
+    typeof env.SEPAY_BANK_ACCOUNT ===
+      "string" &&
+    env.SEPAY_BANK_ACCOUNT.trim()
+      .length > 0;
+
+  return json({
+    ok: true,
+
+    service:
+      "vua-tu-chien-mua1",
+
+    sepaySecretConfigured:
+      configured,
+
+    sepayBankAccountConfigured:
+      bankConfigured,
+
+    note:
+      "Chỉ kiểm tra trạng thái cấu hình, không trả về Secret Key.",
+  });
 }
 
 /* ============================================================
@@ -1472,93 +1514,528 @@ async function tournament(
 
 async function teamRegister(request, env) {
   const session = await currentSession(request, env);
-  if (!session) return json({ ok: false, error: "Bạn cần đăng nhập trước khi đăng ký team." }, 401);
+
+  if (!session) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Bạn cần đăng nhập trước khi đăng ký team.",
+      },
+      401
+    );
+  }
 
   const data = await bodyJson(request);
-  const teamName = cleanString(data.teamName, 60);
-  const logoUrl = cleanString(data.logoUrl, 180000);
-  const registrantName = cleanString(data.registrantName, 80);
-  const contactInfo = cleanString(data.contactInfo, 200);
 
-  if (teamName.length < 2) return json({ ok: false, error: "Tên team phải có ít nhất 2 ký tự." }, 400);
-  if (!registrantName) return json({ ok: false, error: "Vui lòng nhập tên người đăng ký." }, 400);
-  if (!contactInfo) return json({ ok: false, error: "Vui lòng nhập thông tin liên hệ Zalo/Facebook." }, 400);
-  if (logoUrl && !/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(logoUrl)) return json({ ok: false, error: "Logo team không đúng định dạng." }, 400);
-  if (logoUrl.length > 180000) return json({ ok: false, error: "Logo quá lớn. Vui lòng chọn ảnh nhỏ hơn." }, 400);
+  const teamName =
+    cleanString(
+      data.teamName,
+      60
+    );
 
-  const t = await getTournament(env);
-  if (!t) return json({ ok: false, error: "Hiện chưa có giải đấu đang mở." }, 400);
+  const logoUrl =
+    cleanString(
+      data.logoUrl,
+      180000
+    );
 
-  const count = await env.DB.prepare(`
-    SELECT COUNT(*) AS total FROM registrations
-    WHERE tournament_id = ? AND status NOT IN ('CANCELLED','REJECTED')
-  `).bind(t.id).first();
-  const registered = Number(count?.total || 0);
-  if (registered >= Number(t.max_teams || 48)) return json({ ok: false, error: "Giải đấu đã hết slot." }, 409);
+  const registrantName =
+    cleanString(
+      data.registrantName,
+      80
+    );
 
-  const duplicate = await env.DB.prepare(`
-    SELECT id FROM registrations
-    WHERE tournament_id = ? AND user_id = ?
-      AND status NOT IN ('CANCELLED','REJECTED')
-    LIMIT 1
-  `).bind(t.id, session.user.id).first();
-  if (duplicate) return json({ ok: false, error: "Tài khoản này đã đăng ký team cho giải đấu." }, 409);
+  const contactInfo =
+    cleanString(
+      data.contactInfo,
+      200
+    );
 
-  const orderCode = "VTC" + Date.now().toString(36).toUpperCase() + randomToken(5).toUpperCase();
-  const amount = TEAM_ENTRY_FEE;
+  if (
+    teamName.length < 2
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Tên team phải có ít nhất 2 ký tự.",
+      },
+      400
+    );
+  }
+
+  if (!registrantName) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Vui lòng nhập tên người đăng ký.",
+      },
+      400
+    );
+  }
+
+  if (!contactInfo) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Vui lòng nhập thông tin liên hệ Zalo/Facebook.",
+      },
+      400
+    );
+  }
+
+  if (
+    logoUrl &&
+    !/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(
+      logoUrl
+    )
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Logo team không đúng định dạng.",
+      },
+      400
+    );
+  }
+
+  if (
+    logoUrl.length > 180000
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Logo quá lớn. Vui lòng chọn ảnh nhỏ hơn.",
+      },
+      400
+    );
+  }
+
+  const t =
+    await getTournament(
+      env
+    );
+
+  if (!t) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Hiện chưa có giải đấu đang mở.",
+      },
+      400
+    );
+  }
+
+  /*
+   * CHỈ TEAM ĐÃ THANH TOÁN MỚI CHIẾM SLOT.
+   *
+   * Các đơn:
+   * AWAITING_PAYMENT
+   * PAYMENT_PENDING_CONFIRMATION
+   * ... chưa thanh toán
+   *
+   * không làm đầy slot.
+   */
+
+  const count =
+    await env.DB
+      .prepare(`
+        SELECT COUNT(*) AS total
+        FROM registrations
+        WHERE
+          tournament_id = ?
+          AND status IN (
+            'PAID',
+            'CONFIRMED',
+            'APPROVED'
+          )
+      `)
+      .bind(
+        t.id
+      )
+      .first();
+
+  const registered =
+    Number(
+      count?.total || 0
+    );
+
+  if (
+    registered >=
+    Number(
+      t.max_teams || 48
+    )
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Giải đấu đã hết slot.",
+      },
+      409
+    );
+  }
+
+  /*
+   * Một tài khoản không tạo
+   * nhiều đơn đang hoạt động
+   * cho cùng giải.
+   */
+
+  const duplicate =
+    await env.DB
+      .prepare(`
+        SELECT
+          id
+        FROM registrations
+        WHERE
+          tournament_id = ?
+          AND user_id = ?
+          AND status NOT IN (
+            'CANCELLED',
+            'REJECTED'
+          )
+        LIMIT 1
+      `)
+      .bind(
+        t.id,
+        session.user.id
+      )
+      .first();
+
+  if (duplicate) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Tài khoản này đã đăng ký team cho giải đấu.",
+      },
+      409
+    );
+  }
+
+  /*
+   * Mã thanh toán.
+   */
+
+  const orderCode =
+    "VTC" +
+    Date.now()
+      .toString(36)
+      .toUpperCase() +
+    randomToken(5)
+      .toUpperCase();
+
+  /*
+   * Luôn cố định 30.000đ
+   * cho người chơi.
+   */
+
+  const amount =
+    TEAM_ENTRY_FEE;
+
   let teamId;
   let registrationId;
 
   try {
-    const teamResult = await env.DB.prepare(`
-      INSERT INTO teams
-        (name, tag, owner_id, status, logo_url, contact_email, player2_email, registrant_name, contact_info)
-      VALUES (?, NULL, ?, 'PENDING_PAYMENT', ?, ?, '', ?, ?)
-    `).bind(teamName, session.user.id, logoUrl, session.user.email, registrantName, contactInfo).run();
-    teamId = teamResult.meta?.last_row_id;
+    /*
+     * Tạo team ở trạng thái
+     * chờ thanh toán.
+     */
+
+    const teamResult =
+      await env.DB
+        .prepare(`
+          INSERT INTO teams
+            (
+              name,
+              tag,
+              owner_id,
+              status,
+              logo_url,
+              contact_email,
+              player2_email,
+              registrant_name,
+              contact_info
+            )
+          VALUES
+            (
+              ?,
+              NULL,
+              ?,
+              'PENDING_PAYMENT',
+              ?,
+              ?,
+              '',
+              ?,
+              ?
+            )
+        `)
+        .bind(
+          teamName,
+          session.user.id,
+          logoUrl,
+          session.user.email,
+          registrantName,
+          contactInfo
+        )
+        .run();
+
+    teamId =
+      teamResult.meta
+        ?.last_row_id;
 
     if (!teamId) {
-      const team = await env.DB.prepare(`
-        SELECT id FROM teams WHERE owner_id = ? AND name = ?
-        ORDER BY id DESC LIMIT 1
-      `).bind(session.user.id, teamName).first();
-      teamId = team?.id;
+      const team =
+        await env.DB
+          .prepare(`
+            SELECT
+              id
+            FROM teams
+            WHERE
+              owner_id = ?
+              AND name = ?
+            ORDER BY
+              id DESC
+            LIMIT 1
+          `)
+          .bind(
+            session.user.id,
+            teamName
+          )
+          .first();
+
+      teamId =
+        team?.id;
     }
-    if (!teamId) throw new Error("Không tạo được team.");
 
-    await env.DB.prepare(`
-      INSERT OR IGNORE INTO team_members (team_id, user_id, game_uid, nickname)
-      VALUES (?, ?, ?, ?)
-    `).bind(teamId, session.user.id, "", registrantName).run();
+    if (!teamId) {
+      throw new Error(
+        "Không tạo được team."
+      );
+    }
 
-    const registrationResult = await env.DB.prepare(`
-      INSERT INTO registrations (order_code, tournament_id, team_id, user_id, amount, status)
-      VALUES (?, ?, ?, ?, ?, 'AWAITING_PAYMENT')
-    `).bind(orderCode, t.id, teamId, session.user.id, amount).run();
-    registrationId = registrationResult.meta?.last_row_id;
+    /*
+     * Thêm chủ team vào
+     * team_members.
+     */
+
+    await env.DB
+      .prepare(`
+        INSERT OR IGNORE INTO team_members
+          (
+            team_id,
+            user_id,
+            game_uid,
+            nickname
+          )
+        VALUES
+          (?, ?, ?, ?)
+      `)
+      .bind(
+        teamId,
+        session.user.id,
+        "",
+        registrantName
+      )
+      .run();
+
+    /*
+     * Tạo registration.
+     */
+
+    const registrationResult =
+      await env.DB
+        .prepare(`
+          INSERT INTO registrations
+            (
+              order_code,
+              tournament_id,
+              team_id,
+              user_id,
+              amount,
+              status
+            )
+          VALUES
+            (
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              'AWAITING_PAYMENT'
+            )
+        `)
+        .bind(
+          orderCode,
+          t.id,
+          teamId,
+          session.user.id,
+          amount
+        )
+        .run();
+
+    registrationId =
+      registrationResult.meta
+        ?.last_row_id;
 
     if (!registrationId) {
-      const reg = await env.DB.prepare(`SELECT id FROM registrations WHERE order_code = ? LIMIT 1`).bind(orderCode).first();
-      registrationId = reg?.id;
+      const reg =
+        await env.DB
+          .prepare(`
+            SELECT
+              id
+            FROM registrations
+            WHERE
+              order_code = ?
+            LIMIT 1
+          `)
+          .bind(
+            orderCode
+          )
+          .first();
+
+      registrationId =
+        reg?.id;
     }
-    if (!registrationId) throw new Error("Không tạo được đơn đăng ký.");
 
-    await env.DB.prepare(`
-      INSERT INTO payments (registration_id, gateway, transaction_id, amount, status, raw_json)
-      VALUES (?, 'BANK', '', ?, 'PENDING', ?)
-    `).bind(registrationId, amount, JSON.stringify({ type: "BANK_QR", orderCode, createdAt: new Date().toISOString() })).run();
+    if (!registrationId) {
+      throw new Error(
+        "Không tạo được đơn đăng ký."
+      );
+    }
 
-    await writeAudit(env, session.user.id, "TEAM_REGISTER", `registration:${registrationId}`, { teamId, tournamentId: t.id, orderCode, amount });
+    /*
+     * Tạo payment chờ ngân hàng.
+     */
 
-    return json({
-      ok: true,
-      message: `Đăng ký thành công. Mã thanh toán: ${orderCode}.`,
-      registration: { id: Number(registrationId), teamId: Number(teamId), tournamentId: Number(t.id), orderCode, amount, status: "AWAITING_PAYMENT" },
-      team: { id: Number(teamId), name: teamName, logoUrl, registrantName, contactInfo, status: "PENDING_PAYMENT" },
-      bank: { name: env.BANK_NAME || "MB BANK", account: env.BANK_ACCOUNT || "0977049795", owner: env.BANK_OWNER || "Đinh Hồng Hạnh" }
-    }, 201);
+    await env.DB
+      .prepare(`
+        INSERT INTO payments
+          (
+            registration_id,
+            gateway,
+            transaction_id,
+            amount,
+            status,
+            raw_json
+          )
+        VALUES
+          (
+            ?,
+            'BANK',
+            '',
+            ?,
+            'PENDING',
+            ?
+          )
+      `)
+      .bind(
+        registrationId,
+        amount,
+        JSON.stringify({
+          type:
+            "BANK_QR",
+          orderCode,
+          createdAt:
+            new Date().toISOString(),
+        })
+      )
+      .run();
+
+    await writeAudit(
+      env,
+      session.user.id,
+      "TEAM_REGISTER",
+      `registration:${registrationId}`,
+      {
+        teamId,
+        tournamentId:
+          t.id,
+        orderCode,
+        amount,
+      }
+    );
+
+    return json(
+      {
+        ok: true,
+
+        message:
+          `Đăng ký thành công. Mã thanh toán: ${orderCode}.`,
+
+        registration: {
+          id:
+            Number(
+              registrationId
+            ),
+
+          teamId:
+            Number(teamId),
+
+          tournamentId:
+            Number(t.id),
+
+          orderCode,
+
+          amount,
+
+          status:
+            "AWAITING_PAYMENT",
+        },
+
+        team: {
+          id:
+            Number(teamId),
+
+          name:
+            teamName,
+
+          logoUrl,
+
+          registrantName,
+
+          contactInfo,
+
+          status:
+            "PENDING_PAYMENT",
+        },
+
+        bank: {
+          name:
+            env.BANK_NAME ||
+            "MB BANK",
+
+          account:
+            env.BANK_ACCOUNT ||
+            "0977049795",
+
+          owner:
+            env.BANK_OWNER ||
+            "Đinh Hồng Hạnh",
+        },
+      },
+      201
+    );
   } catch (error) {
-    return json({ ok: false, error: "Không thể đăng ký team: " + (error?.message || "D1 error") }, 500);
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể đăng ký team: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
   }
 }
 
@@ -1566,32 +2043,159 @@ async function teamRegister(request, env) {
    TEAM ME
    ============================================================ */
 
-async function teamMe(request, env) {
-  const session = await currentSession(request, env);
-  if (!session) return json({ ok: true, authenticated: false, hasTeam: false });
+async function teamMe(
+  request,
+  env
+) {
+  const session =
+    await currentSession(
+      request,
+      env
+    );
 
-  const row = await env.DB.prepare(`
-    SELECT r.id AS registration_id, r.order_code, r.amount,
-           r.status AS registration_status, r.created_at, r.updated_at,
-           tm.id AS team_id, tm.name AS team_name, tm.tag AS team_tag,
-           tm.status AS team_status, tm.logo_url, tm.registrant_name,
-           tm.contact_info, t.id AS tournament_id, t.name AS tournament_name,
-           t.description AS tournament_description
-    FROM registrations r
-    JOIN teams tm ON tm.id = r.team_id
-    JOIN tournaments t ON t.id = r.tournament_id
-    WHERE r.user_id = ? AND r.status NOT IN ('CANCELLED','REJECTED')
-    ORDER BY r.id DESC LIMIT 1
-  `).bind(session.user.id).first();
+  if (!session) {
+    return json({
+      ok: true,
+      authenticated: false,
+      hasTeam: false,
+    });
+  }
 
-  if (!row) return json({ ok: true, authenticated: true, hasTeam: false });
+  const row =
+    await env.DB
+      .prepare(`
+        SELECT
+          r.id AS registration_id,
+          r.order_code,
+          r.amount,
+          r.status AS registration_status,
+          r.created_at,
+          r.updated_at,
+
+          tm.id AS team_id,
+          tm.name AS team_name,
+          tm.tag AS team_tag,
+          tm.status AS team_status,
+          tm.logo_url,
+          tm.registrant_name,
+          tm.contact_info,
+
+          t.id AS tournament_id,
+          t.name AS tournament_name,
+          t.description AS tournament_description
+
+        FROM registrations r
+
+        JOIN teams tm
+          ON tm.id =
+             r.team_id
+
+        JOIN tournaments t
+          ON t.id =
+             r.tournament_id
+
+        WHERE
+          r.user_id = ?
+          AND r.status NOT IN (
+            'CANCELLED',
+            'REJECTED'
+          )
+
+        ORDER BY
+          r.id DESC
+
+        LIMIT 1
+      `)
+      .bind(
+        session.user.id
+      )
+      .first();
+
+  if (!row) {
+    return json({
+      ok: true,
+      authenticated: true,
+      hasTeam: false,
+    });
+  }
 
   return json({
-    ok: true, authenticated: true, hasTeam: true,
-    registration: { id: Number(row.registration_id), orderCode: row.order_code, amount: Number(row.amount || 0), status: row.registration_status, createdAt: row.created_at || null, updatedAt: row.updated_at || null },
-    team: { id: Number(row.team_id), name: row.team_name, tag: row.team_tag || "", status: row.team_status, logoUrl: row.logo_url || "", registrantName: row.registrant_name || "", contactInfo: row.contact_info || "" },
-    tournament: { id: Number(row.tournament_id), name: row.tournament_name, description: row.tournament_description || "" },
-    schedule: null
+    ok: true,
+
+    authenticated: true,
+
+    hasTeam: true,
+
+    registration: {
+      id:
+        Number(
+          row.registration_id
+        ),
+
+      orderCode:
+        row.order_code,
+
+      amount:
+        Number(
+          row.amount || 0
+        ),
+
+      status:
+        row.registration_status,
+
+      createdAt:
+        row.created_at ||
+        null,
+
+      updatedAt:
+        row.updated_at ||
+        null,
+    },
+
+    team: {
+      id:
+        Number(
+          row.team_id
+        ),
+
+      name:
+        row.team_name,
+
+      tag:
+        row.team_tag ||
+        "",
+
+      status:
+        row.team_status,
+
+      logoUrl:
+        row.logo_url ||
+        "",
+
+      registrantName:
+        row.registrant_name ||
+        "",
+
+      contactInfo:
+        row.contact_info ||
+        "",
+    },
+
+    tournament: {
+      id:
+        Number(
+          row.tournament_id
+        ),
+
+      name:
+        row.tournament_name,
+
+      description:
+        row.tournament_description ||
+        "",
+    },
+
+    schedule: null,
   });
 }
 
@@ -1599,25 +2203,94 @@ async function teamMe(request, env) {
    TEAM PAYMENT CONFIRM
    ============================================================ */
 
-async function teamPaymentConfirm(request, env) {
-  const session = await currentSession(request, env);
-  if (!session) return json({ ok: false, error: "Bạn chưa đăng nhập." }, 401);
+async function teamPaymentConfirm(
+  request,
+  env
+) {
+  const session =
+    await currentSession(
+      request,
+      env
+    );
 
-  const row = await env.DB.prepare(`
-    SELECT id, status FROM registrations
-    WHERE user_id = ? AND status IN ('AWAITING_PAYMENT','PAYMENT_PENDING_CONFIRMATION')
-    ORDER BY id DESC LIMIT 1
-  `).bind(session.user.id).first();
+  if (!session) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Bạn chưa đăng nhập.",
+      },
+      401
+    );
+  }
 
-  if (!row) return json({ ok: false, error: "Không tìm thấy đơn đăng ký đang chờ thanh toán." }, 404);
+  const row =
+    await env.DB
+      .prepare(`
+        SELECT
+          id,
+          status
+        FROM registrations
+        WHERE
+          user_id = ?
+          AND status IN (
+            'AWAITING_PAYMENT',
+            'PAYMENT_PENDING_CONFIRMATION'
+          )
+        ORDER BY
+          id DESC
+        LIMIT 1
+      `)
+      .bind(
+        session.user.id
+      )
+      .first();
 
-  await env.DB.prepare(`
-    UPDATE registrations SET status = 'PAYMENT_PENDING_CONFIRMATION', updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(row.id).run();
+  if (!row) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không tìm thấy đơn đăng ký đang chờ thanh toán.",
+      },
+      404
+    );
+  }
 
-  await writeAudit(env, session.user.id, "PAYMENT_CONFIRM", `registration:${row.id}`, {});
-  return json({ ok: true, registration: { id: Number(row.id), status: "PAYMENT_PENDING_CONFIRMATION" } });
+  await env.DB
+    .prepare(`
+      UPDATE registrations
+      SET
+        status =
+          'PAYMENT_PENDING_CONFIRMATION',
+        updated_at =
+          CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    .bind(
+      row.id
+    )
+    .run();
+
+  await writeAudit(
+    env,
+    session.user.id,
+    "PAYMENT_CONFIRM",
+    `registration:${row.id}`,
+    {}
+  );
+
+  return json({
+    ok: true,
+
+    registration: {
+      id:
+        Number(row.id),
+
+      status:
+        "PAYMENT_PENDING_CONFIRMATION",
+    },
+  });
 }
 
 /* ============================================================
@@ -1744,6 +2417,12 @@ async function paymentWebhook(
   const configured =
     env.SEPAY_WEBHOOK_SECRET;
 
+  /*
+   * Nếu Worker không nhìn thấy
+   * Secret thì đây chính xác là
+   * nguyên nhân trả HTTP 503.
+   */
+
   if (!configured) {
     return json(
       {
@@ -1822,7 +2501,8 @@ async function paymentWebhook(
 
   /*
    * QUAN TRỌNG:
-   * Phải lấy raw body trước khi JSON.parse.
+   * Phải lấy raw body trước
+   * khi JSON.parse.
    */
 
   const rawBody =
@@ -1870,7 +2550,8 @@ async function paymentWebhook(
   }
 
   /*
-   * Chỉ nhận giao dịch tiền vào.
+   * Chỉ nhận giao dịch
+   * tiền vào.
    */
 
   if (
@@ -1952,8 +2633,9 @@ async function paymentWebhook(
   }
 
   /*
-   * Nếu đã cấu hình số tài khoản ngân hàng
-   * thì bắt buộc giao dịch phải đến đúng tài khoản.
+   * Nếu đã cấu hình số tài khoản
+   * ngân hàng thì bắt buộc giao dịch
+   * phải đến đúng tài khoản.
    */
 
   if (
@@ -1986,7 +2668,8 @@ async function paymentWebhook(
           amount,
           status
         FROM registrations
-        WHERE order_code = ?
+        WHERE
+          order_code = ?
         LIMIT 1
       `)
       .bind(
@@ -2026,7 +2709,8 @@ async function paymentWebhook(
   }
 
   /*
-   * Chống xử lý một transaction nhiều lần.
+   * Chống xử lý một transaction
+   * nhiều lần.
    */
 
   const existed =
@@ -2048,10 +2732,13 @@ async function paymentWebhook(
   if (existed) {
     return json({
       ok: true,
+
       message:
         "Giao dịch đã được xử lý.",
+
       registrationId:
         registration.id,
+
       status:
         "PAID",
     });
@@ -2111,7 +2798,8 @@ async function paymentWebhook(
     .run();
 
   /*
-   * Kích hoạt team sau khi thanh toán.
+   * Kích hoạt team sau
+   * khi thanh toán.
    */
 
   await env.DB
@@ -2896,7 +3584,8 @@ async function adminCreateSchedule(
   const tournamentExists =
     await env.DB
       .prepare(`
-        SELECT id
+        SELECT
+          id
         FROM tournaments
         WHERE id = ?
         LIMIT 1
@@ -2921,7 +3610,8 @@ async function adminCreateSchedule(
     const slot =
       await env.DB
         .prepare(`
-          SELECT id
+          SELECT
+            id
           FROM slots
           WHERE
             id = ?
@@ -3140,7 +3830,8 @@ async function adminUpdateSchedule(
       const slot =
         await env.DB
           .prepare(`
-            SELECT id
+            SELECT
+              id
             FROM slots
             WHERE
               id = ?
@@ -3691,13 +4382,15 @@ async function getAdminRankingMatch(
   const retry =
     await env.DB
       .prepare(`
-        SELECT id
+        SELECT
+          id
         FROM matches
         WHERE
           tournament_id = ?
           AND status = 'RANKING'
           AND room_id = 'ADMIN_RANKING'
-        ORDER BY id ASC
+        ORDER BY
+          id ASC
         LIMIT 1
       `)
       .bind(
@@ -4311,6 +5004,22 @@ async function api(
     method === "GET"
   ) {
     return health(env);
+  }
+
+  /*
+   * HEALTH – SEPAY
+   *
+   * Dùng endpoint này để kiểm tra
+   * Secret có thực sự được inject
+   * vào Worker hay chưa.
+   */
+
+  if (
+    path ===
+      "/api/health/sepay" &&
+    method === "GET"
+  ) {
+    return sepayHealth(env);
   }
 
   /*
