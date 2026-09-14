@@ -91,6 +91,7 @@ const SESSION_TTL_MS =
   30 * 24 * 60 * 60 * 1000;
 
 const PBKDF2_ITERATIONS = 100000;
+const TEAM_ENTRY_FEE = 30000;
 
 /* ============================================================
    RESPONSE HELPERS
@@ -1013,14 +1014,24 @@ async function login(
   if (
     !validEmail(
       userEmail
-    ) ||
-    !password
+    )
   ) {
     return json(
       {
         ok: false,
         error:
-          "Vui lòng nhập đúng email và mật khẩu.",
+          "Email không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  if (!password) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Vui lòng nhập mật khẩu.",
       },
       400
     );
@@ -1041,9 +1052,7 @@ async function login(
         WHERE email = ?
         LIMIT 1
       `)
-      .bind(
-        userEmail
-      )
+      .bind(userEmail)
       .first();
 
   if (!user) {
@@ -1089,28 +1098,11 @@ async function login(
     );
   }
 
-  let token;
-
-  try {
-    token =
-      await createSession(
-        env,
-        user.id
-      );
-  } catch (error) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Không thể tạo phiên đăng nhập: " +
-          (
-            error?.message ||
-            "D1 error"
-          ),
-      },
-      500
+  const token =
+    await createSession(
+      env,
+      user.id
     );
-  }
 
   await writeAudit(
     env,
@@ -1152,17 +1144,6 @@ async function logout(
 
   if (token) {
     try {
-      const session =
-        await env.DB
-          .prepare(`
-            SELECT user_id
-            FROM sessions
-            WHERE id = ?
-            LIMIT 1
-          `)
-          .bind(token)
-          .first();
-
       await env.DB
         .prepare(`
           DELETE FROM sessions
@@ -1170,20 +1151,7 @@ async function logout(
         `)
         .bind(token)
         .run();
-
-      if (
-        session?.user_id
-      ) {
-        await writeAudit(
-          env,
-          session.user_id,
-          "LOGOUT",
-          `user:${session.user_id}`
-        );
-      }
-    } catch {
-      // Không làm logout thất bại.
-    }
+    } catch {}
   }
 
   return json(
@@ -1233,12 +1201,46 @@ async function me(
 }
 
 /* ============================================================
-   TOURNAMENT
+   SESSION CLEANUP
    ============================================================ */
 
-async function getTournament(
-  env
-) {
+async function cleanupSessions(env) {
+  try {
+    await env.DB
+      .prepare(`
+        DELETE FROM sessions
+        WHERE CAST(expires_at AS INTEGER) <= ?
+      `)
+      .bind(Date.now())
+      .run();
+  } catch {}
+}
+
+/* ============================================================
+   BANK CONFIG
+   ============================================================ */
+
+function bankConfig(env) {
+  return {
+    name:
+      env.BANK_NAME ||
+      "MB BANK",
+
+    account:
+      env.BANK_ACCOUNT ||
+      "0977049795",
+
+    owner:
+      env.BANK_OWNER ||
+      "Đinh Hồng Hạnh",
+  };
+}
+
+/* ============================================================
+   OPEN TOURNAMENT
+   ============================================================ */
+
+async function getOpenTournament(env) {
   return await env.DB
     .prepare(`
       SELECT
@@ -1251,216 +1253,96 @@ async function getTournament(
         created_at
       FROM tournaments
       WHERE status = 'OPEN'
-      ORDER BY id ASC
+      ORDER BY id DESC
       LIMIT 1
     `)
     .first();
 }
+
+/* ============================================================
+   PUBLIC TOURNAMENT
+   ============================================================ */
 
 async function tournament(
   request,
   env
 ) {
   const t =
-    await getTournament(
+    await getOpenTournament(
       env
     );
 
-  const bank = {
-    name:
-      env.BANK_NAME ||
-      "MB BANK",
-
-    account:
-      env.BANK_ACCOUNT ||
-      "068686862",
-
-    owner:
-      env.BANK_OWNER ||
-      "Dang Gia Khanh",
-  };
+  const bank =
+    bankConfig(env);
 
   if (!t) {
     return json({
       ok: true,
-
       tournament: {
         id: null,
-
         name:
           "Chưa có giải đấu",
-
         description:
           "Hiện chưa có giải đấu đang mở.",
-
         registered: 0,
-
         slots: 0,
-
         remaining: 0,
 
-        entryFee: 0,
+        entryFee:
+          TEAM_ENTRY_FEE,
 
-        status:
-          "CLOSED",
-
+        status: "CLOSED",
         statusText:
           "CHƯA MỞ",
-
-        schedule: [],
 
         bank,
       },
     });
   }
 
-  const count =
-    await env.DB
-      .prepare(`
-        SELECT COUNT(*) AS total
-        FROM registrations
-        WHERE
-          tournament_id = ?
-          AND status IN (
-            'PAID',
-            'CONFIRMED',
-            'APPROVED'
-          )
-      `)
-      .bind(t.id)
-      .first();
-
   const registered =
     Number(
-      count?.total || 0
+      t.registered || 0
     );
 
-  const maxTeams =
+  const slots =
     Number(
-      t.max_teams || 48
+      t.max_teams || 0
     );
 
   const remaining =
     Math.max(
-      maxTeams -
-        registered,
+      slots - registered,
       0
     );
 
-  let schedule = [];
-
-  try {
-    const scheduleResult =
-      await env.DB
-        .prepare(`
-          SELECT
-            m.id,
-            m.start_at,
-            m.room_id,
-            m.status,
-            m.slot_id,
-            s.slot_time,
-            s.group_name
-
-          FROM matches m
-
-          LEFT JOIN slots s
-            ON s.id = m.slot_id
-
-          WHERE
-            m.tournament_id = ?
-
-          ORDER BY
-            CASE
-              WHEN m.start_at IS NULL
-              THEN 1
-              ELSE 0
-            END,
-            m.start_at ASC,
-            m.id ASC
-
-          LIMIT 50
-        `)
-        .bind(t.id)
-        .all();
-
-    schedule =
-      (
-        scheduleResult.results ||
-        []
-      ).map(
-        row => ({
-          id:
-            Number(row.id),
-
-          startAt:
-            row.start_at ||
-            null,
-
-          roomId:
-            row.room_id ||
-            "",
-
-          status:
-            row.status ||
-            "SCHEDULED",
-
-          slotId:
-            row.slot_id == null
-              ? null
-              : Number(
-                  row.slot_id
-                ),
-
-          slotTime:
-            row.slot_time ||
-            null,
-
-          groupName:
-            row.group_name ||
-            "",
-        })
-      );
-  } catch {
-    schedule = [];
-  }
+  const status =
+    remaining > 0
+      ? "OPEN"
+      : "FULL";
 
   return json({
     ok: true,
 
     tournament: {
       id: t.id,
-
-      name:
-        t.name,
-
+      name: t.name,
       description:
-        t.description ||
-        "",
+        t.description || "",
 
       registered,
-
-      slots:
-        maxTeams,
-
+      slots,
       remaining,
 
       entryFee:
-        Number(
-          t.fee || 0
-        ),
+        TEAM_ENTRY_FEE,
 
-      status:
-        remaining > 0
-          ? "OPEN"
-          : "FULL",
+      status,
 
       statusText:
-        remaining > 0
+        status === "OPEN"
           ? "CÒN SLOT"
           : "HẾT SLOT",
-
-      schedule,
 
       bank,
     },
@@ -1492,31 +1374,31 @@ async function teamRegister(
     );
   }
 
-  const data =
+  const body =
     await bodyJson(request);
 
   const teamName =
     cleanString(
-      data.teamName,
+      body.teamName,
       60
     );
 
   const logoUrl =
     cleanString(
-      data.logoUrl,
-      1000
+      body.logoUrl,
+      180000
     );
 
-  const contactEmail =
-    email(
-      data.contactEmail ||
-      session.user.email
+  const registrantName =
+    cleanString(
+      body.registrantName,
+      100
     );
 
-  const player2Email =
-    email(
-      data.player2Email ||
-      ""
+  const contactInfo =
+    cleanString(
+      body.contactInfo,
+      200
     );
 
   if (
@@ -1533,38 +1415,62 @@ async function teamRegister(
   }
 
   if (
-    !validEmail(
-      contactEmail
-    )
+    !registrantName
   ) {
     return json(
       {
         ok: false,
         error:
-          "Email liên hệ không hợp lệ.",
+          "Vui lòng nhập tên người đăng ký.",
       },
       400
     );
   }
 
   if (
-    player2Email &&
-    !validEmail(
-      player2Email
+    !contactInfo
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Vui lòng nhập thông tin liên hệ Zalo/Facebook.",
+      },
+      400
+    );
+  }
+
+  if (
+    logoUrl &&
+    !/^data:image\/(?:png|jpe?g|webp);base64,/i.test(
+      logoUrl
     )
   ) {
     return json(
       {
         ok: false,
         error:
-          "Email thành viên 2 không hợp lệ.",
+          "Logo không đúng định dạng ảnh.",
+      },
+      400
+    );
+  }
+
+  if (
+    logoUrl.length > 180000
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Logo quá lớn.",
       },
       400
     );
   }
 
   const t =
-    await getTournament(
+    await getOpenTournament(
       env
     );
 
@@ -1579,13 +1485,12 @@ async function teamRegister(
     );
   }
 
-  const count =
+  const countRow =
     await env.DB
       .prepare(`
-        SELECT COUNT(*) AS total
+        SELECT COUNT(*) AS count
         FROM registrations
-        WHERE
-          tournament_id = ?
+        WHERE tournament_id = ?
           AND status NOT IN (
             'CANCELLED',
             'REJECTED'
@@ -1596,14 +1501,17 @@ async function teamRegister(
 
   const registered =
     Number(
-      count?.total || 0
+      countRow?.count || 0
+    );
+
+  const maxTeams =
+    Number(
+      t.max_teams || 0
     );
 
   if (
-    registered >=
-    Number(
-      t.max_teams || 48
-    )
+    maxTeams > 0 &&
+    registered >= maxTeams
   ) {
     return json(
       {
@@ -1618,12 +1526,13 @@ async function teamRegister(
   const duplicate =
     await env.DB
       .prepare(`
-        SELECT id
-        FROM registrations
-        WHERE
-          tournament_id = ?
-          AND user_id = ?
-          AND status NOT IN (
+        SELECT r.id
+        FROM registrations r
+        JOIN teams tm
+          ON tm.id = r.team_id
+        WHERE r.tournament_id = ?
+          AND tm.owner_id = ?
+          AND r.status NOT IN (
             'CANCELLED',
             'REJECTED'
           )
@@ -1640,24 +1549,27 @@ async function teamRegister(
       {
         ok: false,
         error:
-          "Tài khoản này đã đăng ký team cho giải đấu.",
+          "Bạn đã có team đăng ký giải này rồi.",
       },
       409
     );
   }
 
   const orderCode =
-    "VTC" +
-    Date.now()
-      .toString(36)
-      .toUpperCase() +
-    randomToken(5)
-      .toUpperCase();
+    (
+      "VTC" +
+      Date.now().toString(36) +
+      randomToken(4)
+        .replace(
+          /[^A-Za-z0-9]/g,
+          ""
+        )
+    )
+      .toUpperCase()
+      .slice(0, 30);
 
   const amount =
-    Number(
-      t.fee || 0
-    );
+    TEAM_ENTRY_FEE;
 
   let teamId;
   let registrationId;
@@ -1674,25 +1586,19 @@ async function teamRegister(
               status,
               logo_url,
               contact_email,
-              player2_email
+              player2_email,
+              registrant_name,
+              contact_info
             )
           VALUES
-            (
-              ?,
-              NULL,
-              ?,
-              'ACTIVE',
-              ?,
-              ?,
-              ?
-            )
+            (?, '', ?, 'PENDING_PAYMENT', ?, '', '', ?, ?)
         `)
         .bind(
           teamName,
           session.user.id,
           logoUrl,
-          contactEmail,
-          player2Email
+          registrantName,
+          contactInfo
         )
         .run();
 
@@ -1701,13 +1607,12 @@ async function teamRegister(
         ?.last_row_id;
 
     if (!teamId) {
-      const team =
+      const createdTeam =
         await env.DB
           .prepare(`
             SELECT id
             FROM teams
-            WHERE
-              owner_id = ?
+            WHERE owner_id = ?
               AND name = ?
             ORDER BY id DESC
             LIMIT 1
@@ -1719,7 +1624,7 @@ async function teamRegister(
           .first();
 
       teamId =
-        team?.id;
+        createdTeam?.id;
     }
 
     if (!teamId) {
@@ -1730,7 +1635,7 @@ async function teamRegister(
 
     await env.DB
       .prepare(`
-        INSERT OR IGNORE INTO team_members
+        INSERT INTO team_members
           (
             team_id,
             user_id,
@@ -1738,56 +1643,14 @@ async function teamRegister(
             nickname
           )
         VALUES
-          (?, ?, ?, ?)
+          (?, ?, '', ?)
       `)
       .bind(
         teamId,
         session.user.id,
-        "",
-        teamName
+        registrantName
       )
       .run();
-
-    if (
-      player2Email &&
-      player2Email !==
-        session.user.email
-    ) {
-      const player2 =
-        await env.DB
-          .prepare(`
-            SELECT id
-            FROM users
-            WHERE email = ?
-            LIMIT 1
-          `)
-          .bind(
-            player2Email
-          )
-          .first();
-
-      if (player2?.id) {
-        await env.DB
-          .prepare(`
-            INSERT OR IGNORE INTO team_members
-              (
-                team_id,
-                user_id,
-                game_uid,
-                nickname
-              )
-            VALUES
-              (?, ?, ?, ?)
-          `)
-          .bind(
-            teamId,
-            player2.id,
-            "",
-            player2Email
-          )
-          .run();
-      }
-    }
 
     const registrationResult =
       await env.DB
@@ -1802,14 +1665,7 @@ async function teamRegister(
               status
             )
           VALUES
-            (
-              ?,
-              ?,
-              ?,
-              ?,
-              ?,
-              'AWAITING_PAYMENT'
-            )
+            (?, ?, ?, ?, ?, 'AWAITING_PAYMENT')
         `)
         .bind(
           orderCode,
@@ -1825,7 +1681,7 @@ async function teamRegister(
         ?.last_row_id;
 
     if (!registrationId) {
-      const reg =
+      const createdRegistration =
         await env.DB
           .prepare(`
             SELECT id
@@ -1839,7 +1695,7 @@ async function teamRegister(
           .first();
 
       registrationId =
-        reg?.id;
+        createdRegistration?.id;
     }
 
     if (!registrationId) {
@@ -1860,27 +1716,15 @@ async function teamRegister(
             raw_json
           )
         VALUES
-          (
-            ?,
-            'BANK',
-            ?,
-            ?,
-            'PENDING',
-            ?
-          )
+          (?, 'BANK', '', ?, 'PENDING', ?)
       `)
       .bind(
         registrationId,
-        orderCode,
         amount,
         JSON.stringify({
-          type:
-            "BANK_QR",
-
           orderCode,
-
-          createdAt:
-            new Date().toISOString(),
+          bank:
+            bankConfig(env),
         })
       )
       .run();
@@ -1889,64 +1733,19 @@ async function teamRegister(
       env,
       session.user.id,
       "TEAM_REGISTER",
-      `registration:${registrationId}`,
+      `team:${teamId}`,
       {
-        teamId,
-        tournamentId:
-          t.id,
+        registrationId,
         orderCode,
         amount,
       }
-    );
-
-    return json(
-      {
-        ok: true,
-
-        message:
-          amount > 0
-            ? `Đăng ký thành công. Mã thanh toán: ${orderCode}.`
-            : `Đăng ký team thành công. Mã đăng ký: ${orderCode}.`,
-
-        registration: {
-          id:
-            registrationId,
-
-          teamId,
-
-          tournamentId:
-            t.id,
-
-          orderCode,
-
-          amount,
-
-          status:
-            "AWAITING_PAYMENT",
-        },
-
-        bank: {
-          name:
-            env.BANK_NAME ||
-            "MB BANK",
-
-          account:
-            env.BANK_ACCOUNT ||
-            "068686862",
-
-          owner:
-            env.BANK_OWNER ||
-            "Dang Gia Khanh",
-        },
-      },
-      201
     );
   } catch (error) {
     return json(
       {
         ok: false,
         error:
-          "Không thể đăng ký team: " +
+          "Không thể tạo đăng ký team: " +
           (
             error?.message ||
             "D1 error"
@@ -1955,688 +1754,289 @@ async function teamRegister(
       500
     );
   }
-}
 
-/* ============================================================
-   PUBLIC RANKING
-   ============================================================ */
-
-async function ranking(
-  request,
-  env
-) {
-  const t =
-    await getTournament(
-      env
-    );
-
-  if (!t) {
-    return json({
+  return json(
+    {
       ok: true,
-      ranking: [],
-    });
-  }
 
-  const result =
-    await env.DB
-      .prepare(`
-        SELECT
-          tm.id AS team_id,
-          tm.name AS team_name,
-          tm.logo_url,
-
-          COALESCE(
-            SUM(
-              CASE
-                WHEN r.points IS NOT NULL
-                THEN r.points
-                ELSE 0
-              END
-            ),
-            0
-          ) AS points
-
-        FROM teams tm
-
-        JOIN registrations reg
-          ON reg.team_id =
-             tm.id
-          AND reg.tournament_id = ?
-
-        LEFT JOIN results r
-          ON r.team_id =
-             tm.id
-
-        LEFT JOIN matches m
-          ON m.id =
-             r.match_id
-          AND m.tournament_id = ?
-
-        WHERE
-          reg.status IN (
-            'PAID',
-            'CONFIRMED',
-            'APPROVED'
-          )
-
-          AND (
-            r.id IS NULL
-            OR m.id IS NOT NULL
-          )
-
-        GROUP BY
-          tm.id,
-          tm.name,
-          tm.logo_url
-
-        ORDER BY
-          points DESC,
-          tm.id ASC
-
-        LIMIT 100
-      `)
-      .bind(
-        t.id,
-        t.id
-      )
-      .all();
-
-  return json({
-    ok: true,
-
-    ranking:
-      (
-        result.results ||
-        []
-      ).map(
-        (row, index) => ({
-          rank:
-            index + 1,
-
-          logoUrl:
-            row.logo_url ||
-            "",
-
-          teamName:
-            row.team_name,
-
-          points:
-            Number(
-              row.points ||
-              0
-            ),
-        })
-      ),
-  });
-}
-
-/* ============================================================
-   PAYMENT WEBHOOK – SEPAY HMAC
-   ============================================================ */
-
-async function paymentWebhook(
-  request,
-  env
-) {
-  const configured =
-    env.SEPAY_WEBHOOK_SECRET;
-
-  if (!configured) {
-    return json(
-      {
-        ok: false,
-        error:
-          "SEPAY_WEBHOOK_SECRET chưa được cấu hình.",
-      },
-      503
-    );
-  }
-
-  const signatureHeader =
-    request.headers.get(
-      "X-SePay-Signature"
-    ) || "";
-
-  const timestampHeader =
-    request.headers.get(
-      "X-SePay-Timestamp"
-    ) || "";
-
-  if (
-    !signatureHeader ||
-    !timestampHeader
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Thiếu chữ ký hoặc timestamp của SePay.",
-      },
-      401
-    );
-  }
-
-  const timestamp =
-    Number(
-      timestampHeader
-    );
-
-  if (
-    !Number.isInteger(
-      timestamp
-    )
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Timestamp của SePay không hợp lệ.",
-      },
-      401
-    );
-  }
-
-  const nowSeconds =
-    Math.floor(
-      Date.now() / 1000
-    );
-
-  if (
-    Math.abs(
-      nowSeconds -
-        timestamp
-    ) > 300
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Webhook đã hết hạn hoặc timestamp không hợp lệ.",
-      },
-      401
-    );
-  }
-
-  /*
-   * QUAN TRỌNG:
-   * Phải lấy raw body trước khi JSON.parse.
-   */
-
-  const rawBody =
-    await request.text();
-
-  const expectedSignature =
-    "sha256=" +
-    await hmacSha256Hex(
-      configured,
-      `${timestamp}.${rawBody}`
-    );
-
-  if (
-    !safeEqual(
-      signatureHeader,
-      expectedSignature
-    )
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Chữ ký SePay không hợp lệ.",
-      },
-      401
-    );
-  }
-
-  let data;
-
-  try {
-    data =
-      JSON.parse(
-        rawBody
-      );
-  } catch {
-    return json(
-      {
-        ok: false,
-        error:
-          "Payload SePay không phải JSON hợp lệ.",
-      },
-      400
-    );
-  }
-
-  /*
-   * Chỉ nhận giao dịch tiền vào.
-   */
-
-  if (
-    String(
-      data.transferType ||
-      ""
-    ).toLowerCase() !==
-    "in"
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Webhook không phải giao dịch tiền vào.",
-      },
-      400
-    );
-  }
-
-  const amount =
-    Number(
-      data.transferAmount ||
-      data.amount ||
-      data.transfer_amount ||
-      0
-    );
-
-  const codeFromPayload =
-    String(
-      data.code ||
-      ""
-    ).trim();
-
-  const content =
-    String(
-      data.content ||
-      ""
-    ).trim();
-
-  /*
-   * Cho phép lấy mã VTC...
-   * từ nội dung chuyển khoản.
-   */
-
-  const codeFromContent =
-    (
-      content.match(
-        /VTC[A-Z0-9_-]+/i
-      ) || []
-    )[0] || "";
-
-  const orderCode =
-    (
-      codeFromPayload ||
-      codeFromContent
-    )
-      .trim()
-      .toUpperCase();
-
-  const transactionId =
-    String(
-      data.id ||
-      ""
-    ).trim();
-
-  if (
-    !orderCode ||
-    amount <= 0 ||
-    !transactionId
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Thiếu mã đăng ký, số tiền hoặc mã giao dịch SePay.",
-      },
-      400
-    );
-  }
-
-  /*
-   * Nếu đã cấu hình số tài khoản ngân hàng
-   * thì bắt buộc giao dịch phải đến đúng tài khoản.
-   */
-
-  if (
-    env.SEPAY_BANK_ACCOUNT &&
-    String(
-      data.accountNumber ||
-      ""
-    ).trim() !==
-      String(
-        env.SEPAY_BANK_ACCOUNT
-      ).trim()
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Giao dịch không đến từ tài khoản ngân hàng đã cấu hình.",
-      },
-      400
-    );
-  }
-
-  const registration =
-    await env.DB
-      .prepare(`
-        SELECT
-          id,
-          team_id,
-          tournament_id,
-          amount,
-          status
-        FROM registrations
-        WHERE order_code = ?
-        LIMIT 1
-      `)
-      .bind(
-        orderCode
-      )
-      .first();
-
-  if (!registration) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Không tìm thấy mã đăng ký.",
-      },
-      404
-    );
-  }
-
-  const required =
-    Number(
-      registration.amount ||
-      0
-    );
-
-  if (
-    amount <
-    required
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Số tiền thanh toán chưa đủ.",
-      },
-      400
-    );
-  }
-
-  /*
-   * Chống xử lý một transaction nhiều lần.
-   */
-
-  const existed =
-    await env.DB
-      .prepare(`
-        SELECT
-          id
-        FROM payments
-        WHERE
-          gateway = 'SEPAY'
-          AND transaction_id = ?
-        LIMIT 1
-      `)
-      .bind(
-        transactionId
-      )
-      .first();
-
-  if (existed) {
-    return json({
-      ok: true,
       message:
-        "Giao dịch đã được xử lý.",
-      registrationId:
-        registration.id,
-      status:
-        "PAID",
-    });
-  }
+        "Đăng ký team thành công. Vui lòng thanh toán 30.000đ.",
 
-  /*
-   * Lưu giao dịch thành công.
-   */
+      team: {
+        id:
+          Number(teamId),
+        name:
+          teamName,
+        logoUrl:
+          logoUrl || "",
+        registrantName:
+          registrantName,
+        contactInfo:
+          contactInfo,
+        status:
+          "PENDING_PAYMENT",
+      },
 
-  await env.DB
-    .prepare(`
-      INSERT INTO payments
-        (
-          registration_id,
-          gateway,
-          transaction_id,
-          amount,
-          status,
-          raw_json
-        )
-      VALUES
-        (
-          ?,
-          'SEPAY',
-          ?,
-          ?,
-          'SUCCESS',
-          ?
-        )
-    `)
-    .bind(
-      registration.id,
-      transactionId,
-      amount,
-      rawBody
-    )
-    .run();
+      registration: {
+        id:
+          Number(
+            registrationId
+          ),
+        orderCode,
+        amount,
+        status:
+          "AWAITING_PAYMENT",
+      },
 
-  /*
-   * Đánh dấu đăng ký đã thanh toán.
-   */
-
-  await env.DB
-    .prepare(`
-      UPDATE registrations
-      SET
-        status = 'PAID',
-        updated_at =
-          CURRENT_TIMESTAMP,
-        reviewed_at =
-          CURRENT_TIMESTAMP
-      WHERE id = ?
-    `)
-    .bind(
-      registration.id
-    )
-    .run();
-
-  /*
-   * Kích hoạt team sau khi thanh toán.
-   */
-
-  await env.DB
-    .prepare(`
-      UPDATE teams
-      SET
-        status = 'ACTIVE'
-      WHERE id = ?
-    `)
-    .bind(
-      registration.team_id
-    )
-    .run();
-
-  return json({
-    ok: true,
-
-    message:
-      "Đã xác nhận thanh toán.",
-
-    registrationId:
-      registration.id,
-
-    status:
-      "PAID",
-  });
+      bank:
+        bankConfig(env),
+    }
+  );
 }
 
 /* ============================================================
-   ADMIN: ME
+   TEAM ME
    ============================================================ */
 
-async function adminMe(
+async function teamMe(
   request,
   env
 ) {
-  const auth =
-    await requireAdmin(
+  const session =
+    await currentSession(
       request,
       env
     );
 
-  if (!auth.ok) {
-    return auth.response;
+  if (!session) {
+    return json({
+      ok: true,
+      authenticated: false,
+      hasTeam: false,
+    });
+  }
+
+  const row =
+    await env.DB
+      .prepare(`
+        SELECT
+          r.id AS registration_id,
+          r.order_code,
+          r.amount,
+          r.status AS registration_status,
+          r.created_at,
+          r.updated_at,
+
+          tm.id AS team_id,
+          tm.name AS team_name,
+          tm.tag AS team_tag,
+          tm.status AS team_status,
+          tm.logo_url,
+          tm.registrant_name,
+          tm.contact_info,
+
+          t.id AS tournament_id,
+          t.name AS tournament_name,
+          t.description AS tournament_description
+
+        FROM registrations r
+
+        JOIN teams tm
+          ON tm.id = r.team_id
+
+        JOIN tournaments t
+          ON t.id = r.tournament_id
+
+        WHERE
+          r.user_id = ?
+          AND r.status NOT IN (
+            'CANCELLED',
+            'REJECTED'
+          )
+
+        ORDER BY
+          r.id DESC
+
+        LIMIT 1
+      `)
+      .bind(
+        session.user.id
+      )
+      .first();
+
+  if (!row) {
+    return json({
+      ok: true,
+      authenticated: true,
+      hasTeam: false,
+    });
   }
 
   return json({
     ok: true,
     authenticated: true,
+    hasTeam: true,
 
-    admin:
-      publicUser(
-        auth.session.user
-      ),
+    registration: {
+      id:
+        Number(
+          row.registration_id
+        ),
+
+      orderCode:
+        row.order_code,
+
+      amount:
+        Number(
+          row.amount || 0
+        ),
+
+      status:
+        row.registration_status,
+
+      createdAt:
+        row.created_at ||
+        null,
+
+      updatedAt:
+        row.updated_at ||
+        null,
+    },
+
+    team: {
+      id:
+        Number(
+          row.team_id
+        ),
+
+      name:
+        row.team_name,
+
+      tag:
+        row.team_tag || "",
+
+      status:
+        row.team_status,
+
+      logoUrl:
+        row.logo_url || "",
+
+      registrantName:
+        row.registrant_name ||
+        "",
+
+      contactInfo:
+        row.contact_info ||
+        "",
+    },
+
+    tournament: {
+      id:
+        Number(
+          row.tournament_id
+        ),
+
+      name:
+        row.tournament_name,
+
+      description:
+        row.tournament_description ||
+        "",
+    },
+
+    schedule: null,
   });
 }
 
 /* ============================================================
-   ADMIN: TOURNAMENT LIST
+   PAYMENT CONFIRM
    ============================================================ */
 
-async function adminTournaments(
+async function teamPaymentConfirm(
   request,
   env
 ) {
-  const auth =
-    await requireAdmin(
+  const session =
+    await currentSession(
       request,
       env
     );
 
-  if (!auth.ok) {
-    return auth.response;
-  }
-
-  try {
-    const result =
-      await env.DB
-        .prepare(`
-          SELECT
-            t.id,
-            t.name,
-            t.description,
-            t.fee,
-            t.max_teams,
-            t.status,
-            t.created_at,
-
-            (
-              SELECT COUNT(*)
-              FROM registrations r
-              WHERE
-                r.tournament_id =
-                  t.id
-                AND r.status NOT IN (
-                  'CANCELLED',
-                  'REJECTED'
-                )
-            ) AS registered
-
-          FROM tournaments t
-
-          ORDER BY
-            t.id DESC
-
-          LIMIT 100
-        `)
-        .all();
-
-    return json({
-      ok: true,
-
-      tournaments:
-        (
-          result.results ||
-          []
-        ).map(
-          row => ({
-            id:
-              Number(row.id),
-
-            name:
-              row.name,
-
-            description:
-              row.description ||
-              "",
-
-            fee:
-              Number(
-                row.fee || 0
-              ),
-
-            maxTeams:
-              Number(
-                row.max_teams ||
-                0
-              ),
-
-            status:
-              row.status,
-
-            registered:
-              Number(
-                row.registered ||
-                0
-              ),
-
-            createdAt:
-              row.created_at ||
-              null,
-          })
-        ),
-    });
-  } catch (error) {
+  if (!session) {
     return json(
       {
         ok: false,
         error:
-          error?.message ||
-          "Không lấy được danh sách giải đấu.",
+          "Bạn chưa đăng nhập.",
       },
-      500
+      401
     );
   }
+
+  const row =
+    await env.DB
+      .prepare(`
+        SELECT
+          id,
+          status
+        FROM registrations
+        WHERE user_id = ?
+          AND status IN (
+            'AWAITING_PAYMENT',
+            'PAYMENT_PENDING_CONFIRMATION'
+          )
+        ORDER BY id DESC
+        LIMIT 1
+      `)
+      .bind(
+        session.user.id
+      )
+      .first();
+
+  if (!row) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không tìm thấy đơn đăng ký đang chờ thanh toán.",
+      },
+      404
+    );
+  }
+
+  await env.DB
+    .prepare(`
+      UPDATE registrations
+      SET
+        status =
+          'PAYMENT_PENDING_CONFIRMATION',
+        updated_at =
+          CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    .bind(row.id)
+    .run();
+
+  await writeAudit(
+    env,
+    session.user.id,
+    "PAYMENT_CONFIRM",
+    `registration:${row.id}`,
+    {}
+  );
+
+  return json({
+    ok: true,
+
+    registration: {
+      id:
+        Number(row.id),
+
+      status:
+        "PAYMENT_PENDING_CONFIRMATION",
+    },
+  });
 }
-
-/* ============================================================
-   ADMIN: CREATE TOURNAMENT
-   ============================================================ */
-
-async function adminCreateTournament(
-  request,
-  env
-) {
-  const auth =
-    await requireAdmin(
-      request,
-      env
-    );
-
-  if (!auth.ok) {
-    return auth.response;
-  }
-
-  const data =
-    await bodyJson(request);
-
   const name =
     cleanString(
       data.name,
@@ -2665,45 +2065,32 @@ async function adminCreateTournament(
       1,
       Math.floor(
         positiveNumber(
-          data.maxTeams,
+          data.maxTeams ??
+            data.max_teams,
           48
         )
       )
     );
 
   const status =
-    String(
-      data.status ||
-      "OPEN"
+    ["OPEN", "CLOSED"].includes(
+      String(
+        data.status ||
+          "OPEN"
+      ).toUpperCase()
     )
-      .trim()
-      .toUpperCase();
+      ? String(
+          data.status ||
+            "OPEN"
+        ).toUpperCase()
+      : "OPEN";
 
-  if (
-    name.length < 2
-  ) {
+  if (!name) {
     return json(
       {
         ok: false,
         error:
-          "Tên giải đấu phải có ít nhất 2 ký tự.",
-      },
-      400
-    );
-  }
-
-  if (
-    ![
-      "OPEN",
-      "CLOSED",
-      "DRAFT"
-    ].includes(status)
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Trạng thái giải đấu không hợp lệ.",
+          "Tên giải đấu không được để trống.",
       },
       400
     );
@@ -2733,7 +2120,7 @@ async function adminCreateTournament(
         )
         .run();
 
-    const tournamentId =
+    const id =
       result.meta
         ?.last_row_id;
 
@@ -2741,8 +2128,8 @@ async function adminCreateTournament(
       env,
       auth.session.user.id,
       "ADMIN_CREATE_TOURNAMENT",
-      tournamentId
-        ? `tournament:${tournamentId}`
+      id
+        ? `tournament:${id}`
         : null,
       {
         name,
@@ -2755,13 +2142,18 @@ async function adminCreateTournament(
     return json(
       {
         ok: true,
-
         message:
-          "Tạo giải đấu thành công.",
+          "Đã tạo giải đấu.",
 
-        tournamentId:
-          tournamentId ||
-          null,
+        tournament: {
+          id:
+            Number(id || 0),
+          name,
+          description,
+          fee,
+          maxTeams,
+          status,
+        },
       },
       201
     );
@@ -2770,11 +2162,8 @@ async function adminCreateTournament(
       {
         ok: false,
         error:
-          "Không thể tạo giải đấu: " +
-          (
-            error?.message ||
-            "D1 error"
-          ),
+          error?.message ||
+          "Không thể tạo giải đấu.",
       },
       500
     );
@@ -2799,14 +2188,12 @@ async function adminUpdateTournament(
     return auth.response;
   }
 
-  const url =
-    new URL(request.url);
+  const data =
+    await bodyJson(request);
 
   const id =
     Number(
-      url.searchParams.get(
-        "id"
-      )
+      data.id
     );
 
   if (
@@ -2823,18 +2210,40 @@ async function adminUpdateTournament(
     );
   }
 
-  const data =
-    await bodyJson(request);
+  const existing =
+    await env.DB
+      .prepare(`
+        SELECT *
+        FROM tournaments
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(id)
+      .first();
+
+  if (!existing) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không tìm thấy giải đấu.",
+      },
+      404
+    );
+  }
 
   const name =
     cleanString(
-      data.name,
+      data.name ??
+        existing.name,
       150
     );
 
   const description =
     cleanString(
-      data.description,
+      data.description ??
+        existing.description ??
+        "",
       2000
     );
 
@@ -2844,7 +2253,9 @@ async function adminUpdateTournament(
       Math.floor(
         positiveNumber(
           data.fee,
-          0
+          Number(
+            existing.fee || 0
+          )
         )
       )
     );
@@ -2854,85 +2265,60 @@ async function adminUpdateTournament(
       1,
       Math.floor(
         positiveNumber(
-          data.maxTeams,
-          48
+          data.maxTeams ??
+            data.max_teams,
+          Number(
+            existing.max_teams ||
+              48
+          )
         )
       )
     );
 
   const status =
     String(
-      data.status ||
-      "OPEN"
-    )
-      .trim()
-      .toUpperCase();
-
-  if (
-    name.length < 2
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Tên giải đấu không hợp lệ.",
-      },
-      400
-    );
-  }
+      data.status ??
+        existing.status ??
+        "OPEN"
+    ).toUpperCase();
 
   if (
     ![
       "OPEN",
       "CLOSED",
-      "DRAFT"
     ].includes(status)
   ) {
     return json(
       {
         ok: false,
         error:
-          "Trạng thái không hợp lệ.",
+          "Trạng thái giải đấu không hợp lệ.",
       },
       400
     );
   }
 
   try {
-    const result =
-      await env.DB
-        .prepare(`
-          UPDATE tournaments
-          SET
-            name = ?,
-            description = ?,
-            fee = ?,
-            max_teams = ?,
-            status = ?
-          WHERE id = ?
-        `)
-        .bind(
-          name,
-          description,
-          fee,
-          maxTeams,
-          status,
-          id
-        )
-        .run();
-
-    if (
-      !result.meta?.changes
-    ) {
-      return json(
-        {
-          ok: false,
-          error:
-            "Không tìm thấy giải đấu.",
-        },
-        404
-      );
-    }
+    await env.DB
+      .prepare(`
+        UPDATE tournaments
+        SET
+          name = ?,
+          description = ?,
+          fee = ?,
+          max_teams = ?,
+          status = ?
+        WHERE id = ?
+      `)
+      .bind(
+        name,
+        description,
+        fee,
+        maxTeams,
+        status,
+        id
+      )
+      .run();
 
     await writeAudit(
       env,
@@ -2951,6 +2337,15 @@ async function adminUpdateTournament(
       ok: true,
       message:
         "Đã cập nhật giải đấu.",
+
+      tournament: {
+        id,
+        name,
+        description,
+        fee,
+        maxTeams,
+        status,
+      },
     });
   } catch (error) {
     return json(
@@ -2966,7 +2361,7 @@ async function adminUpdateTournament(
 }
 
 /* ============================================================
-   ADMIN: SCHEDULE LIST
+   ADMIN: SCHEDULES
    ============================================================ */
 
 async function adminSchedules(
@@ -2984,13 +2379,19 @@ async function adminSchedules(
   }
 
   const url =
-    new URL(request.url);
+    new URL(
+      request.url
+    );
 
   const tournamentId =
     Number(
       url.searchParams.get(
         "tournamentId"
-      )
+      ) ||
+        url.searchParams.get(
+          "tournament_id"
+        ) ||
+        0
     );
 
   if (
@@ -3023,13 +2424,13 @@ async function adminSchedules(
             m.status,
 
             s.slot_time,
-            s.group_name,
-            s.capacity
+            s.group_name
 
           FROM matches m
 
           LEFT JOIN slots s
-            ON s.id = m.slot_id
+            ON s.id =
+               m.slot_id
 
           WHERE
             m.tournament_id = ?
@@ -3095,13 +2496,6 @@ async function adminSchedules(
             groupName:
               row.group_name ||
               "",
-
-            capacity:
-              row.capacity == null
-                ? null
-                : Number(
-                    row.capacity
-                  ),
           })
         ),
     });
@@ -3110,11 +2504,8 @@ async function adminSchedules(
       {
         ok: false,
         error:
-          "Không lấy được lịch thi đấu: " +
-          (
-            error?.message ||
-            "D1 error"
-          ),
+          error?.message ||
+          "Không lấy được lịch thi đấu.",
       },
       500
     );
@@ -3144,45 +2535,47 @@ async function adminCreateSchedule(
 
   const tournamentId =
     Number(
-      data.tournamentId
+      data.tournamentId ??
+        data.tournament_id
     );
 
-  const slotIdRaw =
-    data.slotId;
-
   const slotId =
-    slotIdRaw === "" ||
-    slotIdRaw == null
+    data.slotId ??
+    data.slot_id;
+
+  const normalizedSlotId =
+    slotId == null ||
+    slotId === ""
       ? null
       : Number(
-          slotIdRaw
+          slotId
         );
 
   const roomId =
     cleanString(
-      data.roomId,
+      data.roomId ??
+        data.room_id,
       100
     );
 
   const roomPassword =
     cleanString(
-      data.roomPassword,
-      200
-    );
-
-  const startAt =
-    cleanString(
-      data.startAt,
+      data.roomPassword ??
+        data.room_password,
       100
     );
 
+  const startAt =
+    data.startAt ??
+    data.start_at ??
+    null;
+
   const status =
-    String(
+    cleanString(
       data.status ||
-      "SCHEDULED"
-    )
-      .trim()
-      .toUpperCase();
+        "SCHEDULED",
+      50
+    );
 
   if (
     !Number.isInteger(
@@ -3194,37 +2587,26 @@ async function adminCreateSchedule(
       {
         ok: false,
         error:
-          "Giải đấu không hợp lệ.",
+          "Tournament ID không hợp lệ.",
       },
       400
     );
   }
 
   if (
-    slotId !== null &&
+    normalizedSlotId !== null &&
     (
       !Number.isInteger(
-        slotId
+        normalizedSlotId
       ) ||
-      slotId <= 0
+      normalizedSlotId <= 0
     )
   ) {
     return json(
       {
         ok: false,
         error:
-          "Slot không hợp lệ.",
-      },
-      400
-    );
-  }
-
-  if (!startAt) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Vui lòng chọn thời gian thi đấu.",
+          "Slot ID không hợp lệ.",
       },
       400
     );
@@ -3254,35 +2636,6 @@ async function adminCreateSchedule(
     );
   }
 
-  if (slotId !== null) {
-    const slot =
-      await env.DB
-        .prepare(`
-          SELECT id
-          FROM slots
-          WHERE
-            id = ?
-            AND tournament_id = ?
-          LIMIT 1
-        `)
-        .bind(
-          slotId,
-          tournamentId
-        )
-        .first();
-
-    if (!slot) {
-      return json(
-        {
-          ok: false,
-          error:
-            "Slot không thuộc giải đấu này.",
-        },
-        400
-      );
-    }
-  }
-
   try {
     const result =
       await env.DB
@@ -3301,7 +2654,7 @@ async function adminCreateSchedule(
         `)
         .bind(
           tournamentId,
-          slotId,
+          normalizedSlotId,
           roomId,
           roomPassword,
           startAt,
@@ -3309,7 +2662,7 @@ async function adminCreateSchedule(
         )
         .run();
 
-    const matchId =
+    const id =
       result.meta
         ?.last_row_id;
 
@@ -3317,13 +2670,15 @@ async function adminCreateSchedule(
       env,
       auth.session.user.id,
       "ADMIN_CREATE_SCHEDULE",
-      matchId
-        ? `match:${matchId}`
+      id
+        ? `match:${id}`
         : null,
       {
         tournamentId,
-        startAt,
+        slotId:
+          normalizedSlotId,
         roomId,
+        startAt,
         status,
       }
     );
@@ -3331,11 +2686,27 @@ async function adminCreateSchedule(
     return json(
       {
         ok: true,
+
         message:
-          "Đã thêm lịch thi đấu.",
-        matchId:
-          matchId ||
-          null,
+          "Đã tạo lịch thi đấu.",
+
+        schedule: {
+          id:
+            Number(id || 0),
+
+          tournamentId,
+
+          slotId:
+            normalizedSlotId,
+
+          roomId,
+
+          roomPassword,
+
+          startAt,
+
+          status,
+        },
       },
       201
     );
@@ -3344,11 +2715,8 @@ async function adminCreateSchedule(
       {
         ok: false,
         error:
-          "Không thể thêm lịch: " +
-          (
-            error?.message ||
-            "D1 error"
-          ),
+          error?.message ||
+          "Không thể tạo lịch thi đấu.",
       },
       500
     );
@@ -3373,14 +2741,12 @@ async function adminUpdateSchedule(
     return auth.response;
   }
 
-  const url =
-    new URL(request.url);
+  const data =
+    await bodyJson(request);
 
   const id =
     Number(
-      url.searchParams.get(
-        "id"
-      )
+      data.id
     );
 
   if (
@@ -3391,121 +2757,127 @@ async function adminUpdateSchedule(
       {
         ok: false,
         error:
-          "ID lịch không hợp lệ.",
+          "ID lịch thi đấu không hợp lệ.",
       },
       400
     );
   }
 
-  const data =
-    await bodyJson(request);
+  const existing =
+    await env.DB
+      .prepare(`
+        SELECT *
+        FROM matches
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(id)
+      .first();
 
-  const slotIdRaw =
-    data.slotId;
+  if (!existing) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không tìm thấy lịch thi đấu.",
+      },
+      404
+    );
+  }
+
+  const tournamentId =
+    Number(
+      data.tournamentId ??
+        data.tournament_id ??
+        existing.tournament_id
+    );
+
+  const slotValue =
+    data.slotId ??
+    data.slot_id ??
+    existing.slot_id;
 
   const slotId =
-    slotIdRaw === "" ||
-    slotIdRaw == null
+    slotValue == null ||
+    slotValue === ""
       ? null
       : Number(
-          slotIdRaw
+          slotValue
         );
 
   const roomId =
     cleanString(
-      data.roomId,
+      data.roomId ??
+        data.room_id ??
+        existing.room_id ??
+        "",
       100
     );
 
   const roomPassword =
     cleanString(
-      data.roomPassword,
-      200
-    );
-
-  const startAt =
-    cleanString(
-      data.startAt,
+      data.roomPassword ??
+        data.room_password ??
+        existing.room_password ??
+        "",
       100
     );
 
-  const status =
-    String(
-      data.status ||
-      "SCHEDULED"
-    )
-      .trim()
-      .toUpperCase();
+  const startAt =
+    data.startAt ??
+    data.start_at ??
+    existing.start_at ??
+    null;
 
-  if (!startAt) {
+  const status =
+    cleanString(
+      data.status ??
+        existing.status ??
+        "SCHEDULED",
+      50
+    );
+
+  if (
+    !Number.isInteger(
+      tournamentId
+    ) ||
+    tournamentId <= 0
+  ) {
     return json(
       {
         ok: false,
         error:
-          "Vui lòng chọn thời gian.",
+          "Tournament ID không hợp lệ.",
+      },
+      400
+    );
+  }
+
+  if (
+    slotId !== null &&
+    (
+      !Number.isInteger(
+        slotId
+      ) ||
+      slotId <= 0
+    )
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Slot ID không hợp lệ.",
       },
       400
     );
   }
 
   try {
-    const existing =
-      await env.DB
-        .prepare(`
-          SELECT
-            id,
-            tournament_id
-          FROM matches
-          WHERE id = ?
-          LIMIT 1
-        `)
-        .bind(id)
-        .first();
-
-    if (!existing) {
-      return json(
-        {
-          ok: false,
-          error:
-            "Không tìm thấy lịch.",
-        },
-        404
-      );
-    }
-
-    if (slotId !== null) {
-      const slot =
-        await env.DB
-          .prepare(`
-            SELECT id
-            FROM slots
-            WHERE
-              id = ?
-              AND tournament_id = ?
-            LIMIT 1
-          `)
-          .bind(
-            slotId,
-            existing.tournament_id
-          )
-          .first();
-
-      if (!slot) {
-        return json(
-          {
-            ok: false,
-            error:
-              "Slot không thuộc giải đấu.",
-          },
-          400
-        );
-      }
-    }
-
     await env.DB
       .prepare(`
         UPDATE matches
         SET
+          tournament_id = ?,
           slot_id = ?,
           room_id = ?,
           room_password = ?,
@@ -3514,6 +2886,7 @@ async function adminUpdateSchedule(
         WHERE id = ?
       `)
       .bind(
+        tournamentId,
         slotId,
         roomId,
         roomPassword,
@@ -3527,24 +2900,39 @@ async function adminUpdateSchedule(
       env,
       auth.session.user.id,
       "ADMIN_UPDATE_SCHEDULE",
-      `match:${id}`
+      `match:${id}`,
+      {
+        tournamentId,
+        slotId,
+        roomId,
+        startAt,
+        status,
+      }
     );
 
     return json({
       ok: true,
+
       message:
         "Đã cập nhật lịch thi đấu.",
+
+      schedule: {
+        id,
+        tournamentId,
+        slotId,
+        roomId,
+        roomPassword,
+        startAt,
+        status,
+      },
     });
   } catch (error) {
     return json(
       {
         ok: false,
         error:
-          "Không thể cập nhật lịch: " +
-          (
-            error?.message ||
-            "D1 error"
-          ),
+          error?.message ||
+          "Không thể cập nhật lịch thi đấu.",
       },
       500
     );
@@ -3569,14 +2957,12 @@ async function adminDeleteSchedule(
     return auth.response;
   }
 
-  const url =
-    new URL(request.url);
+  const data =
+    await bodyJson(request);
 
   const id =
     Number(
-      url.searchParams.get(
-        "id"
-      )
+      data.id
     );
 
   if (
@@ -3587,44 +2973,54 @@ async function adminDeleteSchedule(
       {
         ok: false,
         error:
-          "ID lịch không hợp lệ.",
+          "ID lịch thi đấu không hợp lệ.",
       },
       400
     );
   }
 
-  try {
-    const result =
-      await env.DB
-        .prepare(`
-          DELETE FROM matches
-          WHERE id = ?
-        `)
-        .bind(id)
-        .run();
+  const existing =
+    await env.DB
+      .prepare(`
+        SELECT id
+        FROM matches
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(id)
+      .first();
 
-    if (
-      !result.meta?.changes
-    ) {
-      return json(
-        {
-          ok: false,
-          error:
-            "Không tìm thấy lịch.",
-        },
-        404
-      );
-    }
+  if (!existing) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không tìm thấy lịch thi đấu.",
+      },
+      404
+    );
+  }
+
+  try {
+    await env.DB
+      .prepare(`
+        DELETE FROM matches
+        WHERE id = ?
+      `)
+      .bind(id)
+      .run();
 
     await writeAudit(
       env,
       auth.session.user.id,
       "ADMIN_DELETE_SCHEDULE",
-      `match:${id}`
+      `match:${id}`,
+      {}
     );
 
     return json({
       ok: true,
+
       message:
         "Đã xóa lịch thi đấu.",
     });
@@ -3633,11 +3029,8 @@ async function adminDeleteSchedule(
       {
         ok: false,
         error:
-          "Không thể xóa lịch: " +
-          (
-            error?.message ||
-            "D1 error"
-          ),
+          error?.message ||
+          "Không thể xóa lịch thi đấu.",
       },
       500
     );
@@ -3645,7 +3038,7 @@ async function adminDeleteSchedule(
 }
 
 /* ============================================================
-   ADMIN: REGISTERED TEAMS
+   ADMIN: TEAMS
    ============================================================ */
 
 async function adminTeams(
@@ -3663,72 +3056,114 @@ async function adminTeams(
   }
 
   const url =
-    new URL(request.url);
+    new URL(
+      request.url
+    );
 
   const tournamentId =
     Number(
       url.searchParams.get(
         "tournamentId"
-      )
+      ) ||
+        url.searchParams.get(
+          "tournament_id"
+        ) ||
+        0
     );
-
-  if (
-    !Number.isInteger(
-      tournamentId
-    ) ||
-    tournamentId <= 0
-  ) {
-    return json(
-      {
-        ok: false,
-        error:
-          "Thiếu tournamentId.",
-      },
-      400
-    );
-  }
 
   try {
-    const result =
-      await env.DB
-        .prepare(`
-          SELECT
-            t.id,
-            t.name,
-            t.tag,
-            t.logo_url,
-            t.contact_email,
-            t.player2_email,
-            t.owner_id,
-            t.status,
+    let result;
 
-            u.email AS owner_email,
+    if (
+      tournamentId > 0
+    ) {
+      result =
+        await env.DB
+          .prepare(`
+            SELECT
+              tm.id,
+              tm.name,
+              tm.tag,
+              tm.owner_id,
+              tm.status,
+              tm.logo_url,
+              tm.contact_email,
+              tm.player2_email,
+              tm.registrant_name,
+              tm.contact_info,
+              tm.created_at,
 
-            r.id AS registration_id,
-            r.order_code,
-            r.amount,
-            r.status AS registration_status
+              u.email AS owner_email,
 
-          FROM registrations r
+              r.id AS registration_id,
+              r.order_code,
+              r.amount,
+              r.status AS registration_status,
+              r.created_at AS registration_created_at
 
-          JOIN teams t
-            ON t.id = r.team_id
+            FROM teams tm
 
-          LEFT JOIN users u
-            ON u.id = t.owner_id
+            JOIN users u
+              ON u.id =
+                 tm.owner_id
 
-          WHERE
-            r.tournament_id = ?
+            LEFT JOIN registrations r
+              ON r.team_id =
+                 tm.id
+              AND r.tournament_id = ?
 
-          ORDER BY
-            r.id DESC
+            ORDER BY
+              tm.id DESC
 
-          LIMIT 200
-        `)
-        .bind(
-          tournamentId
-        )
-        .all();
+            LIMIT 500
+          `)
+          .bind(
+            tournamentId
+          )
+          .all();
+    } else {
+      result =
+        await env.DB
+          .prepare(`
+            SELECT
+              tm.id,
+              tm.name,
+              tm.tag,
+              tm.owner_id,
+              tm.status,
+              tm.logo_url,
+              tm.contact_email,
+              tm.player2_email,
+              tm.registrant_name,
+              tm.contact_info,
+              tm.created_at,
+
+              u.email AS owner_email,
+
+              r.id AS registration_id,
+              r.order_code,
+              r.amount,
+              r.status AS registration_status,
+              r.tournament_id,
+              r.created_at AS registration_created_at
+
+            FROM teams tm
+
+            JOIN users u
+              ON u.id =
+                 tm.owner_id
+
+            LEFT JOIN registrations r
+              ON r.team_id =
+                 tm.id
+
+            ORDER BY
+              tm.id DESC
+
+            LIMIT 500
+          `)
+          .all();
+    }
 
     return json({
       ok: true,
@@ -3749,6 +3184,18 @@ async function adminTeams(
               row.tag ||
               "",
 
+            ownerId:
+              Number(
+                row.owner_id
+              ),
+
+            ownerEmail:
+              row.owner_email ||
+              "",
+
+            status:
+              row.status,
+
             logoUrl:
               row.logo_url ||
               "",
@@ -3761,29 +3208,53 @@ async function adminTeams(
               row.player2_email ||
               "",
 
-            ownerEmail:
-              row.owner_email ||
+            registrantName:
+              row.registrant_name ||
               "",
 
-            registrationId:
-              Number(
-                row.registration_id
-              ),
+            contactInfo:
+              row.contact_info ||
+              "",
 
-            orderCode:
-              row.order_code,
+            registration:
+              row.registration_id
+                ? {
+                    id:
+                      Number(
+                        row.registration_id
+                      ),
 
-            amount:
-              Number(
-                row.amount ||
-                0
-              ),
+                    orderCode:
+                      row.order_code ||
+                      "",
 
-            registrationStatus:
-              row.registration_status,
+                    amount:
+                      Number(
+                        row.amount ||
+                        0
+                      ),
 
-            teamStatus:
-              row.status,
+                    status:
+                      row.registration_status ||
+                      "",
+
+                    tournamentId:
+                      row.tournament_id
+                        ? Number(
+                            row.tournament_id
+                          )
+                        : tournamentId ||
+                          null,
+
+                    createdAt:
+                      row.registration_created_at ||
+                      null,
+                  }
+                : null,
+
+            createdAt:
+              row.created_at ||
+              null,
           })
         ),
     });
@@ -3792,11 +3263,8 @@ async function adminTeams(
       {
         ok: false,
         error:
-          "Không lấy được danh sách team: " +
-          (
-            error?.message ||
-            "D1 error"
-          ),
+          error?.message ||
+          "Không lấy được danh sách team.",
       },
       500
     );
@@ -3804,7 +3272,7 @@ async function adminTeams(
 }
 
 /* ============================================================
-   ADMIN: RANKING LIST
+   ADMIN: RANKING
    ============================================================ */
 
 async function adminRanking(
@@ -3822,13 +3290,19 @@ async function adminRanking(
   }
 
   const url =
-    new URL(request.url);
+    new URL(
+      request.url
+    );
 
   const tournamentId =
     Number(
       url.searchParams.get(
         "tournamentId"
-      )
+      ) ||
+        url.searchParams.get(
+          "tournament_id"
+        ) ||
+        0
     );
 
   if (
@@ -3852,33 +3326,53 @@ async function adminRanking(
       await env.DB
         .prepare(`
           SELECT
-            t.id AS team_id,
-            t.name AS team_name,
-            t.logo_url,
+            tm.id AS team_id,
+            tm.name AS team_name,
+            tm.tag,
+            tm.logo_url,
 
             COALESCE(
               SUM(
                 CASE
-                  WHEN r.points IS NOT NULL
-                  THEN r.points
+                  WHEN m.tournament_id = ?
+                  THEN COALESCE(
+                    r.points,
+                    0
+                  )
                   ELSE 0
                 END
               ),
               0
-            ) AS points
+            ) AS points,
 
-          FROM teams t
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN m.tournament_id = ?
+                  THEN COALESCE(
+                    r.kills,
+                    0
+                  )
+                  ELSE 0
+                END
+              ),
+              0
+            ) AS kills
+
+          FROM teams tm
 
           JOIN registrations reg
-            ON reg.team_id = t.id
+            ON reg.team_id =
+               tm.id
             AND reg.tournament_id = ?
 
           LEFT JOIN results r
-            ON r.team_id = t.id
+            ON r.team_id =
+               tm.id
 
           LEFT JOIN matches m
-            ON m.id = r.match_id
-            AND m.tournament_id = ?
+            ON m.id =
+               r.match_id
 
           WHERE
             reg.status IN (
@@ -3887,23 +3381,19 @@ async function adminRanking(
               'APPROVED'
             )
 
-            AND (
-              r.id IS NULL
-              OR m.id IS NOT NULL
-            )
-
           GROUP BY
-            t.id,
-            t.name,
-            t.logo_url
+            tm.id,
+            tm.name,
+            tm.tag,
+            tm.logo_url
 
           ORDER BY
             points DESC,
-            t.id ASC
-
-          LIMIT 100
+            kills DESC,
+            tm.id ASC
         `)
         .bind(
+          tournamentId,
           tournamentId,
           tournamentId
         )
@@ -3929,9 +3419,249 @@ async function adminRanking(
             teamName:
               row.team_name,
 
+            tag:
+              row.tag ||
+              "",
+
             logoUrl:
               row.logo_url ||
               "",
+
+            points:
+              Number(
+                row.points ||
+                0
+              ),
+
+            kills:
+              Number(
+                row.kills ||
+                0
+              ),
+          })
+        ),
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          error?.message ||
+          "Không lấy được bảng xếp hạng.",
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN: RANKING MATCH
+   ============================================================ */
+
+async function getAdminRankingMatch(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(
+      request.url
+    );
+
+  const matchId =
+    Number(
+      url.searchParams.get(
+        "matchId"
+      ) ||
+        url.searchParams.get(
+          "match_id"
+        ) ||
+        0
+    );
+
+  if (
+    !Number.isInteger(
+      matchId
+    ) ||
+    matchId <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Thiếu matchId.",
+      },
+      400
+    );
+  }
+
+  try {
+    const match =
+      await env.DB
+        .prepare(`
+          SELECT
+            id,
+            tournament_id,
+            slot_id,
+            room_id,
+            room_password,
+            start_at,
+            status
+          FROM matches
+          WHERE id = ?
+          LIMIT 1
+        `)
+        .bind(
+          matchId
+        )
+        .first();
+
+    if (!match) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Không tìm thấy trận đấu.",
+        },
+        404
+      );
+    }
+
+    const result =
+      await env.DB
+        .prepare(`
+          SELECT
+            tm.id AS team_id,
+            tm.name AS team_name,
+            tm.tag,
+            tm.logo_url,
+
+            COALESCE(
+              res.placement,
+              0
+            ) AS placement,
+
+            COALESCE(
+              res.kills,
+              0
+            ) AS kills,
+
+            COALESCE(
+              res.points,
+              0
+            ) AS points
+
+          FROM teams tm
+
+          JOIN registrations reg
+            ON reg.team_id =
+               tm.id
+            AND reg.tournament_id = ?
+
+          LEFT JOIN results res
+            ON res.team_id =
+               tm.id
+            AND res.match_id = ?
+
+          WHERE
+            reg.status IN (
+              'PAID',
+              'CONFIRMED',
+              'APPROVED'
+            )
+
+          ORDER BY
+            CASE
+              WHEN res.placement IS NULL
+              THEN 999999
+              ELSE res.placement
+            END,
+            tm.id ASC
+        `)
+        .bind(
+          match.tournament_id,
+          matchId
+        )
+        .all();
+
+    return json({
+      ok: true,
+
+      match: {
+        id:
+          Number(match.id),
+
+        tournamentId:
+          Number(
+            match.tournament_id
+          ),
+
+        slotId:
+          match.slot_id == null
+            ? null
+            : Number(
+                match.slot_id
+              ),
+
+        roomId:
+          match.room_id ||
+          "",
+
+        roomPassword:
+          match.room_password ||
+          "",
+
+        startAt:
+          match.start_at ||
+          null,
+
+        status:
+          match.status ||
+          "",
+      },
+
+      teams:
+        (
+          result.results ||
+          []
+        ).map(
+          row => ({
+            teamId:
+              Number(
+                row.team_id
+              ),
+
+            teamName:
+              row.team_name,
+
+            tag:
+              row.tag ||
+              "",
+
+            logoUrl:
+              row.logo_url ||
+              "",
+
+            placement:
+              Number(
+                row.placement ||
+                0
+              ),
+
+            kills:
+              Number(
+                row.kills ||
+                0
+              ),
 
             points:
               Number(
@@ -3946,112 +3676,18 @@ async function adminRanking(
       {
         ok: false,
         error:
-          "Không lấy được BXH: " +
-          (
-            error?.message ||
-            "D1 error"
-          ),
+          error?.message ||
+          "Không lấy được dữ liệu trận đấu.",
       },
       500
     );
   }
 }
-
 /* ============================================================
-   ADMIN: FIND/CREATE RANKING MATCH
+   ADMIN: CREATE ADMIN ACCOUNT
    ============================================================ */
 
-async function getAdminRankingMatch(
-  env,
-  tournamentId
-) {
-  const existing =
-    await env.DB
-      .prepare(`
-        SELECT
-          id
-        FROM matches
-        WHERE
-          tournament_id = ?
-          AND status = 'RANKING'
-          AND room_id = 'ADMIN_RANKING'
-        ORDER BY id ASC
-        LIMIT 1
-      `)
-      .bind(
-        tournamentId
-      )
-      .first();
-
-  if (existing?.id) {
-    return Number(
-      existing.id
-    );
-  }
-
-  const result =
-    await env.DB
-      .prepare(`
-        INSERT INTO matches
-          (
-            tournament_id,
-            slot_id,
-            room_id,
-            room_password,
-            start_at,
-            status
-          )
-        VALUES
-          (
-            ?,
-            NULL,
-            'ADMIN_RANKING',
-            '',
-            ?,
-            'RANKING'
-          )
-      `)
-      .bind(
-        tournamentId,
-        new Date().toISOString()
-      )
-      .run();
-
-  const id =
-    result.meta
-      ?.last_row_id;
-
-  if (id) {
-    return Number(id);
-  }
-
-  const retry =
-    await env.DB
-      .prepare(`
-        SELECT id
-        FROM matches
-        WHERE
-          tournament_id = ?
-          AND status = 'RANKING'
-          AND room_id = 'ADMIN_RANKING'
-        ORDER BY id ASC
-        LIMIT 1
-      `)
-      .bind(
-        tournamentId
-      )
-      .first();
-
-  return retry?.id
-    ? Number(retry.id)
-    : null;
-}
-
-/* ============================================================
-   ADMIN: SAVE RANKING
-   ============================================================ */
-
-async function adminSaveRanking(
+async function adminCreateAdmin(
   request,
   env
 ) {
@@ -4068,175 +3704,662 @@ async function adminSaveRanking(
   const data =
     await bodyJson(request);
 
-  const tournamentId =
-    Number(
-      data.tournamentId
-    );
+  const newEmail =
+    email(data.email);
 
-  const teamId =
-    Number(
-      data.teamId
-    );
-
-  const points =
-    Math.max(
-      0,
-      Math.floor(
-        positiveNumber(
-          data.points,
-          0
-        )
-      )
-    );
-
-  const placement =
-    Math.max(
-      0,
-      Math.floor(
-        positiveNumber(
-          data.placement,
-          0
-        )
-      )
-    );
-
-  const kills =
-    Math.max(
-      0,
-      Math.floor(
-        positiveNumber(
-          data.kills,
-          0
-        )
-      )
+  const password =
+    String(
+      data.password ||
+      ""
     );
 
   if (
-    !Number.isInteger(
-      tournamentId
-    ) ||
-    tournamentId <= 0
+    !validEmail(
+      newEmail
+    )
   ) {
     return json(
       {
         ok: false,
         error:
-          "Giải đấu không hợp lệ.",
+          "Email admin không hợp lệ.",
       },
       400
     );
   }
 
   if (
-    !Number.isInteger(
-      teamId
-    ) ||
-    teamId <= 0
+    password.length < 6
   ) {
     return json(
       {
         ok: false,
         error:
-          "Team không hợp lệ.",
+          "Mật khẩu admin phải có ít nhất 6 ký tự.",
       },
       400
     );
   }
 
-  const registration =
+  const exists =
     await env.DB
       .prepare(`
         SELECT
-          r.id,
-          r.status
-        FROM registrations r
-        WHERE
-          r.tournament_id = ?
-          AND r.team_id = ?
-          AND r.status IN (
-            'PAID',
-            'CONFIRMED',
-            'APPROVED'
-          )
+          id,
+          role
+        FROM users
+        WHERE email = ?
         LIMIT 1
       `)
       .bind(
-        tournamentId,
-        teamId
+        newEmail
       )
       .first();
 
-  if (!registration) {
+  if (exists) {
     return json(
       {
         ok: false,
         error:
-          "Team chưa có đăng ký thanh toán hợp lệ cho giải này.",
+          "Email này đã tồn tại.",
       },
-      400
+      409
     );
   }
 
+  const passwordData =
+    await makePassword(
+      password
+    );
+
   try {
-    const matchId =
-      await getAdminRankingMatch(
-        env,
-        tournamentId
-      );
+    const result =
+      await env.DB
+        .prepare(`
+          INSERT INTO users
+            (
+              email,
+              password_hash,
+              password_salt,
+              role,
+              status
+            )
+          VALUES
+            (?, ?, ?, 'ADMIN', 'ACTIVE')
+        `)
+        .bind(
+          newEmail,
+          passwordData.hash,
+          passwordData.salt
+        )
+        .run();
 
-    if (!matchId) {
-      throw new Error(
-        "Không tạo được bảng BXH."
-      );
-    }
-
-    await env.DB
-      .prepare(`
-        DELETE FROM results
-        WHERE
-          match_id = ?
-          AND team_id = ?
-      `)
-      .bind(
-        matchId,
-        teamId
-      )
-      .run();
-
-    await env.DB
-      .prepare(`
-        INSERT INTO results
-          (
-            match_id,
-            team_id,
-            placement,
-            kills,
-            points
-          )
-        VALUES
-          (?, ?, ?, ?, ?)
-      `)
-      .bind(
-        matchId,
-        teamId,
-        placement,
-        kills,
-        points
-      )
-      .run();
+    const userId =
+      result.meta
+        ?.last_row_id;
 
     await writeAudit(
       env,
       auth.session.user.id,
-      "ADMIN_SAVE_RANKING",
-      `team:${teamId}`,
+      "ADMIN_CREATE_ADMIN",
+      userId
+        ? `user:${userId}`
+        : null,
       {
-        tournamentId,
-        teamId,
-        points,
-        placement,
-        kills,
+        email:
+          newEmail,
       }
+    );
+
+    return json(
+      {
+        ok: true,
+
+        message:
+          "Đã tạo tài khoản admin.",
+
+        userId:
+          userId ||
+          null,
+      },
+      201
+    );
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể tạo admin: " +
+          (
+            error?.message ||
+            "D1 error"
+          ),
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
+   ADMIN API ROUTER
+   ============================================================ */
+
+async function adminApi(
+  request,
+  env
+) {
+  const url =
+    new URL(
+      request.url
+    );
+
+  const path =
+    url.pathname;
+
+  const method =
+    request.method
+      .toUpperCase();
+
+  /*
+   * ADMIN ME
+   */
+
+  if (
+    path ===
+      "/api/admin/me" &&
+    method === "GET"
+  ) {
+    return adminMe(
+      request,
+      env
+    );
+  }
+
+  /*
+   * TOURNAMENTS
+   */
+
+  if (
+    path ===
+      "/api/admin/tournaments" &&
+    method === "GET"
+  ) {
+    return adminTournaments(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/tournaments" &&
+    method === "POST"
+  ) {
+    return adminCreateTournament(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/tournaments" &&
+    method === "PUT"
+  ) {
+    return adminUpdateTournament(
+      request,
+      env
+    );
+  }
+
+  /*
+   * SCHEDULES
+   */
+
+  if (
+    path ===
+      "/api/admin/schedules" &&
+    method === "GET"
+  ) {
+    return adminSchedules(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/schedules" &&
+    method === "POST"
+  ) {
+    return adminCreateSchedule(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/schedules" &&
+    method === "PUT"
+  ) {
+    return adminUpdateSchedule(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/schedules" &&
+    method === "DELETE"
+  ) {
+    return adminDeleteSchedule(
+      request,
+      env
+    );
+  }
+
+  /*
+   * TEAMS
+   */
+
+  if (
+    path ===
+      "/api/admin/teams" &&
+    method === "GET"
+  ) {
+    return adminTeams(
+      request,
+      env
+    );
+  }
+
+  /*
+   * RANKING
+   */
+
+  if (
+    path ===
+      "/api/admin/ranking" &&
+    method === "GET"
+  ) {
+    return adminRanking(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/ranking/match" &&
+    method === "GET"
+  ) {
+    const tournamentId =
+      Number(
+        url.searchParams.get(
+          "tournamentId"
+        )
+      );
+
+    if (
+      !Number.isInteger(
+        tournamentId
+      ) ||
+      tournamentId <= 0
+    ) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Thiếu tournamentId.",
+        },
+        400
+      );
+    }
+
+    try {
+      const matchId =
+        await getAdminRankingMatch(
+          env,
+          tournamentId
+        );
+
+      if (!matchId) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Không tạo được bảng BXH.",
+          },
+          500
+        );
+      }
+
+      return json({
+        ok: true,
+        matchId,
+      });
+    } catch (error) {
+      return json(
+        {
+          ok: false,
+          error:
+            error?.message ||
+            "Không lấy được bảng BXH.",
+        },
+        500
+      );
+    }
+  }
+
+  if (
+    path ===
+      "/api/admin/ranking" &&
+    method === "POST"
+  ) {
+    return adminSaveRanking(
+      request,
+      env
+    );
+  }
+
+  /*
+   * CREATE ADMIN
+   */
+
+  if (
+    path ===
+      "/api/admin/create-admin" &&
+    method === "POST"
+  ) {
+    return adminCreateAdmin(
+      request,
+      env
+    );
+  }
+
+  return json(
+    {
+      ok: false,
+      error:
+        "Admin API không tồn tại.",
+    },
+    404
+  );
+}
+
+/* ============================================================
+   PUBLIC API ROUTER
+   ============================================================ */
+
+async function api(
+  request,
+  env
+) {
+  const url =
+    new URL(
+      request.url
+    );
+
+  const path =
+    url.pathname;
+
+  const method =
+    request.method
+      .toUpperCase();
+
+  /*
+   * HEALTH
+   */
+
+  if (
+    path ===
+      "/api/health" &&
+    method === "GET"
+  ) {
+    return health(env);
+  }
+
+  /*
+   * AUTH REGISTER
+   */
+
+  if (
+    path ===
+      "/api/auth/register" &&
+    method === "POST"
+  ) {
+    return register(
+      request,
+      env
+    );
+  }
+
+  /*
+   * AUTH LOGIN
+   */
+
+  if (
+    path ===
+      "/api/auth/login" &&
+    method === "POST"
+  ) {
+    return login(
+      request,
+      env
+    );
+  }
+
+  /*
+   * AUTH LOGOUT
+   */
+
+  if (
+    path ===
+      "/api/auth/logout" &&
+    method === "POST"
+  ) {
+    return logout(
+      request,
+      env
+    );
+  }
+
+  /*
+   * AUTH ME
+   */
+
+  if (
+    path ===
+      "/api/auth/me" &&
+    method === "GET"
+  ) {
+    return me(
+      request,
+      env
+    );
+  }
+
+  /*
+   * TOURNAMENT
+   */
+
+  if (
+    path ===
+      "/api/tournament" &&
+    method === "GET"
+  ) {
+    return tournament(
+      request,
+      env
+    );
+  }
+
+  /*
+   * TEAM REGISTER
+   */
+
+  if (
+    path ===
+      "/api/team/register" &&
+    method === "POST"
+  ) {
+    return teamRegister(
+      request,
+      env
+    );
+  }
+
+  /*
+   * TEAM ME
+   */
+
+  if (
+    path ===
+      "/api/team/me" &&
+    method === "GET"
+  ) {
+    return teamMe(
+      request,
+      env
+    );
+  }
+
+  /*
+   * PAYMENT CONFIRM
+   */
+
+  if (
+    path ===
+      "/api/team/payment-confirm" &&
+    method === "POST"
+  ) {
+    return teamPaymentConfirm(
+      request,
+      env
+    );
+  }
+
+  /*
+   * RANKING
+   */
+
+  if (
+    path ===
+      "/api/ranking" &&
+    method === "GET"
+  ) {
+    return ranking(
+      request,
+      env
+    );
+  }
+
+  /*
+   * SEPAY WEBHOOK
+   */
+
+  if (
+    path ===
+      "/api/payment/webhook" &&
+    method === "POST"
+  ) {
+    return paymentWebhook(
+      request,
+      env
+    );
+  }
+
+  /*
+   * ADMIN API
+   */
+
+  if (
+    path.startsWith(
+      "/api/admin/"
+    )
+  ) {
+    return adminApi(
+      request,
+      env
+    );
+  }
+
+  return json(
+    {
+      ok: false,
+      error:
+        "API không tồn tại.",
+    },
+    404
+  );
+}
+
+/* ============================================================
+   FETCH
+   ============================================================ */
+
+export default {
+  async fetch(
+    request,
+    env,
+    ctx
+  ) {
+    const url =
+      new URL(
+        request.url
+      );
+
+    /*
+     * API
+     */
+
+    if (
+      url.pathname.startsWith(
+        "/api/"
+      )
+    ) {
+      return api(
+        request,
+        env
+      );
+    }
+
+    /*
+     * STATIC ASSETS
+     */
+
+    if (
+      env.ASSETS
+    ) {
+      return env.ASSETS.fetch(
+        request
+      );
+    }
+
+    return new Response(
+      "GIẢI ĐẤU VUA TỬ CHIẾN – MÙA 1",
+      {
+        status: 200,
+        headers: {
+          "content-type":
+            "text/plain; charset=utf-8",
+        },
+      }
+    );
+  },
+
+  async scheduled(
+    event,
+    env,
+    ctx
+  ) {
+    ctx.waitUntil(
+      cleanupSessions(env)
+    );
+  },
+};
     );
 
     return json({
@@ -4728,6 +4851,28 @@ async function api(
     );
   }
 
+  if (
+    path ===
+      "/api/team/me" &&
+    method === "GET"
+  ) {
+    return teamMe(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/team/payment-confirm" &&
+    method === "POST"
+  ) {
+    return teamPaymentConfirm(
+      request,
+      env
+    );
+  }
+
   /*
    * PUBLIC RANKING
    */
@@ -4850,6 +4995,24 @@ export default {
     }
 
     /*
+     * PUBLIC FILES
+     *
+     * public/index.html
+     * public/admin.html
+     * ...
+     */
+
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(
+        request
+      );
+    }
+
+    return text(
+      "GIẢI ĐẤU TỬ CHIẾN – MÙA 1"
+    );
+  },
+      /*
      * PUBLIC FILES
      *
      * public/index.html
