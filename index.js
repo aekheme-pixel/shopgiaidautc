@@ -2168,7 +2168,6 @@ async function teamPaymentConfirm(
       500
     );
   }
-}
 
 /* ============================================================
    ADMIN: UPDATE TOURNAMENT
