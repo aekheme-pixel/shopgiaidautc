@@ -967,7 +967,32 @@ footer{
     grid-template-columns:1fr;
   }
 
+  /* FIX POPUP MOBILE / IPHONE */
+
+  .overlay{
+    align-items:flex-start !important;
+    justify-content:center !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+    touch-action:pan-y;
+    padding:
+      max(14px,env(safe-area-inset-top))
+      12px
+      max(24px,env(safe-area-inset-bottom));
+  }
+
+  .overlay.show{
+    display:flex;
+    align-items:flex-start !important;
+    justify-content:center !important;
+  }
+
   .modal{
+    width:100%;
+    max-height:none !important;
+    margin:0 auto 20px;
     padding:38px 24px 30px;
     border-radius:25px;
   }
