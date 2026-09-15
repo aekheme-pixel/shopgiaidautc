@@ -2020,7 +2020,7 @@ function resetTeamForm(){
     .style.display = "block";
 
   $("#teamSubmit")
-    .disabled = false;
+    .disabled = true;
 
   $("#teamSubmit")
     .textContent =
@@ -2742,25 +2742,29 @@ function openExistingPayment(data){
   }
 
 
-  $("#paymentActions")
-    .style.display =
-    "block";
+if(order){
+  $("#orderBox").classList.remove("hidden");
+  $("#orderCode").textContent = order;
 
-  $("#teamSubmit")
-    .textContent =
-    "ĐÃ THANH TOÁN";
+  renderQr(
+    bank.name || "MB BANK",
+    bank.account || "0977049795",
+    bank.owner || "Đinh Hồng Hạnh",
+    ENTRY_FEE,
+    order
+  );
+}
 
-  $("#paymentStatus")
-    .style.display =
-    "block";
+$("#paymentActions").style.display = "block";
+$("#teamSubmit").disabled = false;
+$("#teamSubmit").textContent = "XÁC NHẬN ĐÃ CHUYỂN KHOẢN";
 
-  $("#paymentStatus")
-    .textContent =
-    "ĐANG CHỜ XÁC NHẬN THANH TOÁN...";
+$("#paymentStatus").style.display = "none";
 
-  show("teamOverlay");
+show("teamOverlay");
 
-  startPaymentPolling();
+startPaymentPolling();
+
 }
 
 
@@ -3410,12 +3414,133 @@ $("#logoutBtn")
    CREATE TEAM REGISTRATION
 ===================================================== */
 
+function validateTeamForm(){
+
+  const teamName =
+    $("#teamName")
+      .value
+      .trim();
+
+  const registrantName =
+    $("#registrantName")
+      .value
+      .trim();
+
+  const contactInfo =
+    $("#contactInfo")
+      .value
+      .trim();
+
+  if(!teamName){
+    return "Vui lòng nhập tên team.";
+  }
+
+  if(!registrantName){
+    return "Vui lòng nhập tên người đăng ký.";
+  }
+
+  if(!contactInfo){
+    return "Vui lòng nhập thông tin Zalo hoặc Facebook.";
+  }
+
+  if(!selectedLogoData){
+    return "Vui lòng chọn logo team.";
+  }
+
+  return "";
+}
+
+
+/*
+ * Cập nhật trạng thái nút theo
+ * thông tin người dùng đã nhập.
+ */
+function updateTeamSubmitButton(){
+
+  const button =
+    $("#teamSubmit");
+
+  if(!button) return;
+
+  /*
+   * Nếu đã có mã đơn:
+   * nút trở thành xác nhận đã chuyển khoản.
+   */
+  const orderCode =
+    $("#orderCode")
+      .textContent
+      .trim();
+
+  if(
+    orderCode &&
+    orderCode !== "—"
+  ){
+
+    button.disabled = false;
+
+    button.textContent =
+      "XÁC NHẬN ĐÃ CHUYỂN KHOẢN";
+
+    return;
+  }
+
+  /*
+   * Chưa tạo đăng ký:
+   * kiểm tra đủ thông tin.
+   */
+  const error =
+    validateTeamForm();
+
+  button.disabled =
+    Boolean(error);
+
+  button.textContent =
+    "TẠO ĐĂNG KÝ & HIỆN QR";
+}
+
+
+/*
+ * Khi người dùng nhập form,
+ * cập nhật nút ngay lập tức.
+ */
+[
+  "#teamName",
+  "#registrantName",
+  "#contactInfo"
+]
+.forEach(selector => {
+
+  $(selector)
+    .addEventListener(
+      "input",
+      () => {
+
+        box(
+          "teamError",
+          ""
+        );
+
+        updateTeamSubmitButton();
+
+      }
+    );
+
+});
+
+
 $("#teamSubmit")
   .onclick =
   async () => {
 
-    box("teamError","");
-    box("teamSuccess","");
+    box(
+      "teamError",
+      ""
+    );
+
+    box(
+      "teamSuccess",
+      ""
+    );
 
 
     const teamName =
@@ -3434,48 +3559,10 @@ $("#teamSubmit")
         .trim();
 
 
-    if(!teamName){
-
-      box(
-        "teamError",
-        "Vui lòng nhập tên team."
-      );
-
-      return;
-    }
-
-
-    if(!registrantName){
-
-      box(
-        "teamError",
-        "Vui lòng nhập tên người đăng ký."
-      );
-
-      return;
-    }
-
-
-    if(!contactInfo){
-
-      box(
-        "teamError",
-        "Vui lòng nhập thông tin Zalo hoặc Facebook."
-      );
-
-      return;
-    }
-
-
-    const button =
-      $("#teamSubmit");
-
-
     /*
-     * Nếu đã có order code thì nút này
-     * trở thành "ĐÃ THANH TOÁN".
+     * Nếu đã có order code thì đây
+     * là bước xác nhận đã chuyển khoản.
      */
-
     const existingOrder =
       $("#orderCode")
         .textContent
@@ -3491,6 +3578,29 @@ $("#teamSubmit")
 
       return;
     }
+
+
+    /*
+     * Kiểm tra toàn bộ thông tin.
+     */
+    const validationError =
+      validateTeamForm();
+
+    if(validationError){
+
+      box(
+        "teamError",
+        validationError
+      );
+
+      updateTeamSubmitButton();
+
+      return;
+    }
+
+
+    const button =
+      $("#teamSubmit");
 
 
     button.disabled = true;
@@ -3552,6 +3662,9 @@ $("#teamSubmit")
         };
 
 
+      /*
+       * Hiện mã đơn.
+       */
       $("#orderBox")
         .classList
         .remove("hidden");
@@ -3561,6 +3674,9 @@ $("#teamSubmit")
         orderCode;
 
 
+      /*
+       * Tạo QR đúng số tiền + mã đơn.
+       */
       renderQr(
         bank.name || "MB BANK",
         bank.account || "0977049795",
@@ -3570,25 +3686,34 @@ $("#teamSubmit")
       );
 
 
+      /*
+       * Sau khi tạo đơn:
+       * nút chuyển thành xác nhận đã chuyển khoản.
+       */
       $("#paymentActions")
         .style.display =
         "block";
-
 
       button.disabled =
         false;
 
       button.textContent =
-        "ĐÃ THANH TOÁN";
+        "XÁC NHẬN ĐÃ CHUYỂN KHOẢN";
 
 
       box(
         "teamSuccess",
-        "Đăng ký team đã được tạo. Hãy thanh toán 30.000đ rồi bấm ĐÃ THANH TOÁN."
+        "Đăng ký đã được tạo. Vui lòng chuyển đúng 30.000đ và giữ nguyên nội dung chuyển khoản."
       );
 
 
-      startPaymentPolling();
+      /*
+       * Chưa chuyển khoản thì chưa hiện
+       * trạng thái đợi duyệt.
+       */
+      $("#paymentStatus")
+        .style.display =
+        "none";
 
 
     }catch(error){
@@ -3613,68 +3738,36 @@ $("#teamSubmit")
 ===================================================== */
 
 async function confirmPayment(){
-
-  const button =
-    $("#teamSubmit");
-
-
-  button.disabled =
-    true;
-
-  button.textContent =
-    "ĐANG XÁC NHẬN...";
-
-
   try{
+    const res = await api("/api/team/payment-confirm", {
+      method: "POST"
+    });
 
-    const data =
-      await api(
-        "/api/team/payment-confirm",
-        {
-          method:"POST",
+    if(!res.ok){
+      throw new Error(res.error || "Không thể xác nhận thanh toán.");
+    }
 
-          body:
-            JSON.stringify({})
-        }
-      );
+    $("#paymentActions").style.display = "none";
 
+    $("#paymentStatus").style.display = "block";
+    $("#paymentStatus").textContent =
+      "⏳ ĐANG ĐỢI DUYỆT THANH TOÁN...";
 
-    $("#paymentStatus")
-      .style.display =
-      "block";
-
-    $("#paymentStatus")
-      .textContent =
-      "ĐANG CHỜ XÁC NHẬN THANH TOÁN...";
-
-
-    button.textContent =
-      "ĐANG CHỜ SEPAY...";
-
+    box(
+      "teamSuccess",
+      "Đã ghi nhận yêu cầu xác nhận. Hệ thống đang chờ SePay xác nhận giao dịch."
+    );
 
     startPaymentPolling();
 
+  }catch(err){
+    box("teamError", err.message);
 
-  }catch(error){
-
-    /*
-     * Nếu backend đã ghi nhận trạng thái
-     * nhưng response có vấn đề, vẫn không
-     * tự báo thành công.
-     */
-
-    box(
-      "teamError",
-      error.message
-    );
-
-    button.disabled =
-      false;
-
-    button.textContent =
-      "ĐÃ THANH TOÁN";
+    $("#paymentActions").style.display = "block";
+    $("#teamSubmit").disabled = false;
+    $("#teamSubmit").textContent =
+      "XÁC NHẬN ĐÃ CHUYỂN KHOẢN";
   }
-
 }
 
 
