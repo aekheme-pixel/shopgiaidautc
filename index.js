@@ -2417,12 +2417,6 @@ async function paymentWebhook(
   const configured =
     env.SEPAY_WEBHOOK_SECRET;
 
-  /*
-   * Nếu Worker không nhìn thấy
-   * Secret thì đây chính xác là
-   * nguyên nhân trả HTTP 503.
-   */
-
   if (!configured) {
     return json(
       {
@@ -2500,7 +2494,6 @@ async function paymentWebhook(
   }
 
   /*
-   * QUAN TRỌNG:
    * Phải lấy raw body trước
    * khi JSON.parse.
    */
@@ -2550,8 +2543,41 @@ async function paymentWebhook(
   }
 
   /*
-   * Chỉ nhận giao dịch
-   * tiền vào.
+   * ==========================================================
+   * SEPAY TEST / GỬI THỬ
+   * ==========================================================
+   *
+   * Khi bấm "Gửi thử", SePay gửi
+   * payload mẫu chứ không phải
+   * giao dịch ngân hàng thật.
+   *
+   * id test thường là 0.
+   *
+   * Không tạo payment giả.
+   * Không kích hoạt team.
+   */
+
+  const rawTransactionId =
+    String(
+      data.id ?? ""
+    ).trim();
+
+  const isSepayTest =
+    rawTransactionId === "0";
+
+  if (isSepayTest) {
+    return json({
+      ok: true,
+
+      test: true,
+
+      message:
+        "Đã nhận webhook test từ SePay. Không phát sinh giao dịch thật.",
+    });
+  }
+
+  /*
+   * Chỉ nhận giao dịch tiền vào.
    */
 
   if (
@@ -2591,11 +2617,6 @@ async function paymentWebhook(
       ""
     ).trim();
 
-  /*
-   * Cho phép lấy mã VTC...
-   * từ nội dung chuyển khoản.
-   */
-
   const codeFromContent =
     (
       content.match(
@@ -2612,10 +2633,7 @@ async function paymentWebhook(
       .toUpperCase();
 
   const transactionId =
-    String(
-      data.id ||
-      ""
-    ).trim();
+    rawTransactionId;
 
   if (
     !orderCode ||
@@ -2633,9 +2651,7 @@ async function paymentWebhook(
   }
 
   /*
-   * Nếu đã cấu hình số tài khoản
-   * ngân hàng thì bắt buộc giao dịch
-   * phải đến đúng tài khoản.
+   * Kiểm tra đúng tài khoản ngân hàng.
    */
 
   if (
@@ -2658,6 +2674,10 @@ async function paymentWebhook(
     );
   }
 
+  /*
+   * Tìm đơn đăng ký.
+   */
+
   const registration =
     await env.DB
       .prepare(`
@@ -2665,6 +2685,7 @@ async function paymentWebhook(
           id,
           team_id,
           tournament_id,
+          user_id,
           amount,
           status
         FROM registrations
@@ -2687,6 +2708,10 @@ async function paymentWebhook(
       404
     );
   }
+
+  /*
+   * Kiểm tra số tiền.
+   */
 
   const required =
     Number(
@@ -2737,7 +2762,9 @@ async function paymentWebhook(
         "Giao dịch đã được xử lý.",
 
       registrationId:
-        registration.id,
+        Number(
+          registration.id
+        ),
 
       status:
         "PAID",
@@ -2785,7 +2812,8 @@ async function paymentWebhook(
     .prepare(`
       UPDATE registrations
       SET
-        status = 'PAID',
+        status =
+          'PAID',
         updated_at =
           CURRENT_TIMESTAMP,
         reviewed_at =
@@ -2798,8 +2826,7 @@ async function paymentWebhook(
     .run();
 
   /*
-   * Kích hoạt team sau
-   * khi thanh toán.
+   * Kích hoạt team.
    */
 
   await env.DB
@@ -2814,6 +2841,26 @@ async function paymentWebhook(
     )
     .run();
 
+  /*
+   * Ghi audit log.
+   */
+
+  await writeAudit(
+    env,
+    registration.user_id,
+    "SEPAY_PAYMENT_SUCCESS",
+    `registration:${registration.id}`,
+    {
+      transactionId,
+      amount,
+      orderCode,
+      teamId:
+        registration.team_id,
+      tournamentId:
+        registration.tournament_id,
+    }
+  );
+
   return json({
     ok: true,
 
@@ -2821,7 +2868,9 @@ async function paymentWebhook(
       "Đã xác nhận thanh toán.",
 
     registrationId:
-      registration.id,
+      Number(
+        registration.id
+      ),
 
     status:
       "PAID",
