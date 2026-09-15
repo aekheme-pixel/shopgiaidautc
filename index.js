@@ -1765,26 +1765,27 @@ async function teamRegister(request, env) {
               contact_info
             )
           VALUES
-            (
-              ?,
-              NULL,
-              ?,
-              'PENDING_PAYMENT',
-              ?,
-              ?,
-              '',
-              ?,
-              ?
-            )
+  (
+    ?,
+    ?,
+    ?,
+    'PENDING_PAYMENT',
+    ?,
+    ?,
+    '',
+    ?,
+    ?
+  )
         `)
-        .bind(
-          teamName,
-          session.user.id,
-          logoUrl,
-          session.user.email,
-          registrantName,
-          contactInfo
-        )
+.bind(
+  teamName,
+  teamName,
+  session.user.id,
+  logoUrl,
+  session.user.email,
+  registrantName,
+  contactInfo
+)
         .run();
 
     teamId =
