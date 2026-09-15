@@ -1916,39 +1916,31 @@ async function teamRegister(request, env) {
      * Tạo payment chờ ngân hàng.
      */
 
-    await env.DB
-      .prepare(`
-        INSERT INTO payments
-          (
-            registration_id,
-            gateway,
-            transaction_id,
-            amount,
-            status,
-            raw_json
-          )
-        VALUES
-          (
-            ?,
-            'BANK',
-            '',
-            ?,
-            'PENDING',
-            ?
-          )
-      `)
-      .bind(
-        registrationId,
+await env.DB
+  .prepare(`
+    INSERT INTO payments
+      (
+        registration_id,
+        transaction_id,
         amount,
-        JSON.stringify({
-          type:
-            "BANK_QR",
-          orderCode,
-          createdAt:
-            new Date().toISOString(),
-        })
+        description,
+        status
       )
-      .run();
+    VALUES
+      (
+        ?,
+        '',
+        ?,
+        ?,
+        'PENDING'
+      )
+  `)
+  .bind(
+    registrationId,
+    amount,
+    `BANK_QR ${orderCode}`
+  )
+  .run();
 
     await writeAudit(
       env,
