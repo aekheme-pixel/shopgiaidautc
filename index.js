@@ -1769,7 +1769,7 @@ async function teamRegister(request, env) {
     ?,
     ?,
     ?,
-    'PENDING_PAYMENT',
+    'ACTIVE',
     ?,
     ?,
     '',
