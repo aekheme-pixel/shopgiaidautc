@@ -2196,71 +2196,63 @@ async function teamMe(
    TEAM PAYMENT CONFIRM
    ============================================================ */
 
-async function teamPaymentConfirm(
-  request,
-  env
-) {
-  const session =
-    await currentSession(
-      request,
-      env
-    );
+async function teamPaymentConfirm(request, env) {
+  const session = await currentSession(request, env);
 
   if (!session) {
     return json(
       {
         ok: false,
-        error:
-          "Bạn chưa đăng nhập.",
+        error: "Bạn chưa đăng nhập."
       },
       401
     );
   }
 
-  const row =
-    await env.DB
-      .prepare(`
-        SELECT
-          id,
-          status
-        FROM registrations
-        WHERE
-          user_id = ?
-          AND status IN (
-            'AWAITING_PAYMENT',
-            'PAYMENT_PENDING_CONFIRMATION'
-          )
-        ORDER BY
-          id DESC
-        LIMIT 1
-      `)
-      .bind(
-        session.user.id
-      )
-      .first();
+  const row = await env.DB
+    .prepare(`
+      SELECT
+        r.id,
+        r.order_code,
+        r.status
+      FROM registrations r
+      WHERE
+        r.user_id = ?
+        AND r.status = 'AWAITING_PAYMENT'
+      ORDER BY r.id DESC
+      LIMIT 1
+    `)
+    .bind(session.user.id)
+    .first();
 
   if (!row) {
     return json(
       {
         ok: false,
-        error:
-          "Không tìm thấy đơn đăng ký đang chờ thanh toán.",
+        error: "Không tìm thấy đơn đăng ký đang chờ thanh toán."
       },
       404
     );
   }
 
+  /*
+    Không đổi registrations.status.
+    Giữ AWAITING_PAYMENT để tương thích schema hiện tại.
+
+    Chỉ đánh dấu rằng người dùng đã bấm
+    "XÁC NHẬN ĐÃ CHUYỂN KHOẢN".
+  */
+
   await env.DB
     .prepare(`
-      UPDATE registrations
+      UPDATE payments
       SET
-        status =
-          'PAYMENT_PENDING_CONFIRMATION',
-        updated_at =
-          CURRENT_TIMESTAMP
-      WHERE id = ?
+        description = ?,
+        status = 'PENDING'
+      WHERE registration_id = ?
     `)
     .bind(
+      `BANK_QR ${row.order_code} | USER_CONFIRMED`,
       row.id
     )
     .run();
@@ -2270,19 +2262,18 @@ async function teamPaymentConfirm(
     session.user.id,
     "PAYMENT_CONFIRM",
     `registration:${row.id}`,
-    {}
+    {
+      orderCode: row.order_code
+    }
   );
 
   return json({
     ok: true,
-
     registration: {
-      id:
-        Number(row.id),
-
-      status:
-        "PAYMENT_PENDING_CONFIRMATION",
-    },
+      id: Number(row.id),
+      orderCode: row.order_code,
+      status: "PAYMENT_PENDING_CONFIRMATION"
+    }
   });
 }
 
