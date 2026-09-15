@@ -2461,41 +2461,60 @@ function renderQr(
   const bankCode =
     vietQrBankCode(bankName);
 
-  const accountEncoded =
-    encodeURIComponent(
-      String(account)
+  const cleanAccount =
+    String(account || "").trim();
+
+  const cleanOwner =
+    String(owner || "").trim();
+
+  const cleanAmount =
+    String(
+      Number(amount || 0)
     );
 
-  const ownerEncoded =
-    encodeURIComponent(
-      String(owner || "")
-    );
+  const cleanOrderCode =
+    String(orderCode || "")
+      .trim()
+      .toUpperCase();
 
-  const addInfo =
-    encodeURIComponent(
-      String(orderCode || "")
-    );
+  const params =
+    new URLSearchParams();
 
-  let url =
+  params.set(
+    "amount",
+    cleanAmount
+  );
+
+  params.set(
+    "accountName",
+    cleanOwner
+  );
+
+  /*
+   * Nội dung chuyển khoản
+   * chính là mã đơn VTC...
+   */
+
+  if(cleanOrderCode){
+
+    params.set(
+      "addInfo",
+      cleanOrderCode
+    );
+  }
+
+  const url =
     "https://img.vietqr.io/image/" +
     bankCode +
     "-" +
-    accountEncoded +
-    "-compact2.png" +
-    "?amount=" +
-    encodeURIComponent(
-      String(amount)
-    ) +
-    "&accountName=" +
-    ownerEncoded;
+    cleanAccount +
+    "-compact2.png?" +
+    params.toString();
 
-  if(orderCode){
-
-    url +=
-      "&addInfo=" +
-      addInfo;
-  }
-
+  console.log(
+    "QR payment URL:",
+    url
+  );
 
   $("#qrBox")
     .innerHTML =
