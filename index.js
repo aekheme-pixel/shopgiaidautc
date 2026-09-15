@@ -2539,12 +2539,13 @@ async function paymentWebhook(
     if (
       transactionId === "0"
     ) {
-      return json({
-        ok: true,
-        test: true,
-        message:
-          "Đã nhận webhook test từ SePay. Không phát sinh giao dịch thật."
-      });
+return json({
+  ok: true,
+  success: true,
+  test: true,
+  message:
+    "Đã nhận webhook test từ SePay. Không phát sinh giao dịch thật."
+});
     }
 
     /*
@@ -2722,10 +2723,11 @@ async function paymentWebhook(
       ).toUpperCase() ===
       "PAID"
     ) {
-      return json({
-        ok: true,
-        message:
-          "Đơn đăng ký đã được xác nhận thanh toán.",
+return json({
+  ok: true,
+  success: true,
+  message:
+    "Đơn đăng ký đã được xác nhận thanh toán.",
         registrationId:
           Number(
             registration.id
@@ -2790,10 +2792,11 @@ async function paymentWebhook(
         .first();
 
     if (existed) {
-      return json({
-        ok: true,
-        message:
-          "Giao dịch SePay đã được xử lý trước đó.",
+return json({
+  ok: true,
+  success: true,
+  message:
+    "Giao dịch SePay đã được xử lý trước đó.",
         registrationId:
           Number(
             registration.id
@@ -2954,19 +2957,20 @@ async function paymentWebhook(
      * ==========================================================
      */
 
-    return json({
-      ok: true,
-      message:
-        "Đã xác nhận thanh toán.",
-      registrationId:
-        Number(
-          registration.id
-        ),
-      orderCode,
-      amount,
-      status:
-        "PAID"
-    });
+return json({
+  ok: true,
+  success: true,
+  message:
+    "Đã xác nhận thanh toán.",
+  registrationId:
+    Number(
+      registration.id
+    ),
+  orderCode,
+  amount,
+  status:
+    "PAID"
+});
 
   } catch (error) {
 
