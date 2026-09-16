@@ -2851,7 +2851,7 @@ return json({
             transaction_id = ?,
             amount = ?,
             description = ?,
-            status = 'SUCCESS',
+            status = 'CONFIRMED',
             reviewed_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `)
@@ -2879,9 +2879,8 @@ return json({
               description,
               status
             )
-          VALUES
-            (?, ?, ?, ?, 'SUCCESS')
-        `)
+VALUES
+  (?, ?, ?, ?, 'CONFIRMED')
         .bind(
           registration.id,
           transactionId,
