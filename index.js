@@ -2845,23 +2845,23 @@ return json({
 
     if (payment) {
       await env.DB
-        .prepare(`
-          UPDATE payments
-          SET
-            transaction_id = ?,
-            amount = ?,
-            description = ?,
-            status = 'CONFIRMED',
-            reviewed_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `)
-        .bind(
-          transactionId,
-          amount,
-          `SEPAY ${orderCode}`,
-          payment.id
-        )
-        .run();
+  .prepare(`
+    UPDATE payments
+    SET
+      transaction_id = ?,
+      amount = ?,
+      description = ?,
+      status = 'CONFIRMED',
+      reviewed_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `)
+  .bind(
+    transactionId,
+    amount,
+    `SEPAY ${orderCode}`,
+    payment.id
+  )
+  .run();
     } else {
       /*
        * Trường hợp đặc biệt nếu payment
@@ -2879,8 +2879,9 @@ return json({
               description,
               status
             )
-VALUES
-  (?, ?, ?, ?, 'CONFIRMED')
+          VALUES
+            (?, ?, ?, ?, 'CONFIRMED')
+        `)
         .bind(
           registration.id,
           transactionId,
