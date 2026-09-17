@@ -1845,12 +1845,19 @@ footer{
       </div>
 
 
-      <button
-        id="teamViewClose"
-        class="submit"
-        style="margin-top:20px;">
-        ĐÓNG
-      </button>
+<button
+  id="teamEditBtn"
+  class="submit"
+  style="margin-top:20px;">
+  ✏️ CHỈNH SỬA TEAM
+</button>
+
+<button
+  id="teamViewClose"
+  class="submit"
+  style="margin-top:10px;">
+  ĐÓNG
+</button>
 
     </section>
 
@@ -2249,9 +2256,7 @@ function updateTournamentAction(){
         ""
       ).toUpperCase();
 
-    if(status === "PAID" ||
-       status === "CONFIRMED" ||
-       status === "APPROVED"){
+if(status === "CONFIRMED"){
 
       button.textContent =
         "XEM TEAM CỦA BẠN";
@@ -2662,10 +2667,7 @@ async function openTeam(){
      * mở lại QR / trạng thái.
      */
 
-    if(
-      status === "AWAITING_PAYMENT" ||
-      status === "PAYMENT_PENDING_CONFIRMATION"
-    ){
+if(status === "AWAITING_PAYMENT"){
 
       openExistingPayment(current);
 
@@ -2866,125 +2868,110 @@ $("#teamLogoFile")
 
 
 function compressImage(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
 
-  return new Promise(
-    (resolve,reject) => {
+    reader.onload = ()=>{
+      const image = new Image();
 
-      const reader =
-        new FileReader();
+      image.onload = ()=>{
+        try{
+          /*
+           * CROP CHÍNH XÁC TỈ LỆ 4:3
+           */
+          const TARGET_RATIO = 4 / 3;
+          const MAX_WIDTH = 320;
+          const MAX_HEIGHT = 240;
 
+          let cropWidth = image.width;
+          let cropHeight = image.height;
 
-      reader.onload = () => {
+          const currentRatio =
+            image.width / image.height;
 
-        const image =
-          new Image();
-
-
-        image.onload = () => {
-
-          const maxSize = 320;
-
-          let width =
-            image.width;
-
-          let height =
-            image.height;
-
-
-          if(width > height){
-
-            if(width > maxSize){
-
-              height =
-                Math.round(
-                  height *
-                  maxSize /
-                  width
-                );
-
-              width =
-                maxSize;
-            }
-
-          }else{
-
-            if(height > maxSize){
-
-              width =
-                Math.round(
-                  width *
-                  maxSize /
-                  height
-                );
-
-              height =
-                maxSize;
-            }
+          if(currentRatio > TARGET_RATIO){
+            // Ảnh quá rộng → cắt hai bên
+            cropWidth =
+              Math.round(
+                image.height * TARGET_RATIO
+              );
+          }else if(currentRatio < TARGET_RATIO){
+            // Ảnh quá cao → cắt trên/dưới
+            cropHeight =
+              Math.round(
+                image.width / TARGET_RATIO
+              );
           }
 
+          const sx =
+            Math.round(
+              (image.width - cropWidth) / 2
+            );
+
+          const sy =
+            Math.round(
+              (image.height - cropHeight) / 2
+            );
 
           const canvas =
-            document.createElement(
-              "canvas"
-            );
+            document.createElement("canvas");
 
-          canvas.width =
-            width;
-
-          canvas.height =
-            height;
-
+          canvas.width = MAX_WIDTH;
+          canvas.height = MAX_HEIGHT;
 
           const ctx =
-            canvas.getContext(
-              "2d"
-            );
-
+            canvas.getContext("2d");
 
           ctx.drawImage(
             image,
+            sx,
+            sy,
+            cropWidth,
+            cropHeight,
             0,
             0,
-            width,
-            height
+            MAX_WIDTH,
+            MAX_HEIGHT
           );
 
-
-          resolve(
+          const dataUrl =
             canvas.toDataURL(
               "image/jpeg",
-              .78
-            )
-          );
-        };
-
-
-        image.onerror =
-          () =>
-            reject(
-              new Error(
-                "Không đọc được ảnh."
-              )
+              0.82
             );
 
+          resolve(dataUrl);
 
-        image.src =
-          reader.result;
-      };
-
-
-      reader.onerror =
-        () =>
+        }catch(error){
           reject(
             new Error(
-              "Không thể đọc file ảnh."
+              "Không thể xử lý logo."
             )
           );
+        }
+      };
 
+      image.onerror = ()=>{
+        reject(
+          new Error(
+            "File logo không hợp lệ."
+          )
+        );
+      };
 
-      reader.readAsDataURL(file);
-    }
-  );
+      image.src = reader.result;
+    };
+
+    reader.onerror = ()=>{
+      reject(
+        new Error(
+          "Không thể đọc file logo."
+        )
+      );
+    };
+
+    reader.readAsDataURL(file);
+  });
 }
 
 
@@ -3844,11 +3831,7 @@ async function checkPaymentStatus(){
      * Đã thanh toán.
      */
 
-    if(
-      status === "PAID" ||
-      status === "CONFIRMED" ||
-      status === "APPROVED"
-    ){
+if(status === "CONFIRMED"){
 
       stopPaymentPolling();
 
@@ -4048,10 +4031,7 @@ async function openMyTeam(){
         .textContent =
         "ĐÃ XÁC NHẬN THANH TOÁN";
 
-    }else if(
-      status ===
-      "PAYMENT_PENDING_CONFIRMATION"
-    ){
+}else if(status === "AWAITING_PAYMENT"){
 
       $("#teamViewStatus")
         .textContent =
@@ -4091,15 +4071,9 @@ async function openMyTeam(){
      * Nếu chưa PAID thì tiếp tục polling.
      */
 
-    if(
-      status !== "PAID" &&
-      status !== "CONFIRMED" &&
-      status !== "APPROVED"
-    ){
-
-      startPaymentPolling();
-
-    }
+if(status !== "CONFIRMED"){
+  startPaymentPolling();
+}
 
   }catch(error){
 
@@ -4128,6 +4102,330 @@ $("#teamViewClose")
     stopPaymentPolling();
 
     hide("teamOverlay");
+  };
+
+
+/* =====================================================
+   EDIT TEAM
+===================================================== */
+
+let editTeamLogoData = "";
+
+
+/* Mở form chỉnh sửa */
+
+$("#teamEditBtn")
+  .onclick =
+  () => {
+
+    if(!myTeam || !myTeam.team){
+      return;
+    }
+
+    const team =
+      myTeam.team;
+
+
+    $("#editTeamName")
+      .value =
+      team.name || "";
+
+
+    $("#editRegistrantName")
+      .value =
+      team.registrantName || "";
+
+
+    $("#editContactInfo")
+      .value =
+      team.contactInfo || "";
+
+
+    editTeamLogoData =
+      team.logoUrl || "";
+
+
+    $("#editTeamLogo")
+      .value = "";
+
+
+    const preview =
+      $("#editTeamLogoPreview");
+
+
+    if(editTeamLogoData){
+
+      preview.src =
+        editTeamLogoData;
+
+      preview.style.display =
+        "block";
+
+    }else{
+
+      preview.style.display =
+        "none";
+    }
+
+
+    $("#editTeamMessage")
+      .textContent = "";
+
+
+    $("#editTeamModal")
+      .style.display =
+      "block";
+  };
+
+
+
+/* Đóng form */
+
+$("#editTeamCloseBtn")
+  .onclick =
+  () => {
+
+    $("#editTeamModal")
+      .style.display =
+      "none";
+  };
+
+
+
+/* Chọn logo mới */
+
+$("#editTeamLogo")
+  .onchange =
+  async function(){
+
+    const file =
+      this.files?.[0];
+
+    if(!file){
+      return;
+    }
+
+
+    if(
+      !file.type.startsWith("image/")
+    ){
+
+      $("#editTeamMessage")
+        .textContent =
+        "❌ Vui lòng chọn file ảnh.";
+
+      return;
+    }
+
+
+    try{
+
+      const data =
+        await compressImage(file);
+
+
+      if(!data){
+
+        throw new Error(
+          "LOGO_ERROR"
+        );
+      }
+
+
+      if(data.length > 180000){
+
+        $("#editTeamMessage")
+          .textContent =
+          "❌ Logo quá lớn. Hãy chọn ảnh khác.";
+
+        return;
+      }
+
+
+      editTeamLogoData =
+        data;
+
+
+      $("#editTeamLogoPreview")
+        .src =
+        editTeamLogoData;
+
+
+      $("#editTeamLogoPreview")
+        .style.display =
+        "block";
+
+
+      $("#editTeamMessage")
+        .textContent = "";
+
+
+    }catch(error){
+
+      console.error(
+        "EDIT LOGO:",
+        error
+      );
+
+
+      $("#editTeamMessage")
+        .textContent =
+        "❌ Không thể xử lý logo.";
+    }
+  };
+
+
+
+/* Lưu thay đổi */
+
+$("#saveTeamEditBtn")
+  .onclick =
+  async () => {
+
+    const teamName =
+      $("#editTeamName")
+        .value
+        .trim();
+
+
+    const registrantName =
+      $("#editRegistrantName")
+        .value
+        .trim();
+
+
+    const contactInfo =
+      $("#editContactInfo")
+        .value
+        .trim();
+
+
+    if(!teamName){
+
+      $("#editTeamMessage")
+        .textContent =
+        "❌ Vui lòng nhập tên team.";
+
+      return;
+    }
+
+
+    if(!registrantName){
+
+      $("#editTeamMessage")
+        .textContent =
+        "❌ Vui lòng nhập tên người đăng ký.";
+
+      return;
+    }
+
+
+    if(!contactInfo){
+
+      $("#editTeamMessage")
+        .textContent =
+        "❌ Vui lòng nhập Zalo/Facebook.";
+
+      return;
+    }
+
+
+    const button =
+      $("#saveTeamEditBtn");
+
+
+    button.disabled =
+      true;
+
+
+    $("#editTeamMessage")
+      .textContent =
+      "⏳ Đang lưu thay đổi...";
+
+
+    try{
+
+      await api(
+        "/api/team/update",
+        {
+          method:"POST",
+
+          body:
+            JSON.stringify({
+              teamName:
+                teamName,
+
+              logoUrl:
+                editTeamLogoData,
+
+              registrantName:
+                registrantName,
+
+              contactInfo:
+                contactInfo
+            })
+        }
+      );
+
+
+      $("#editTeamMessage")
+        .textContent =
+        "✅ Đã cập nhật team!";
+
+
+      /*
+       * Lấy lại dữ liệu team mới
+       */
+
+      await loadMyTeam();
+
+
+      /*
+       * Đóng form sau khi lưu
+       */
+
+      setTimeout(
+        () => {
+
+          $("#editTeamModal")
+            .style.display =
+            "none";
+
+
+          /*
+           * Mở lại TEAM CỦA BẠN
+           * để hiển thị dữ liệu mới
+           */
+
+          openMyTeam();
+
+        },
+        700
+      );
+
+
+    }catch(error){
+
+      console.error(
+        "UPDATE TEAM:",
+        error
+      );
+
+
+      $("#editTeamMessage")
+        .textContent =
+        "❌ " +
+        (
+          error.message ||
+          "Không thể cập nhật team."
+        );
+
+
+    }finally{
+
+      button.disabled =
+        false;
+    }
   };
 
 
