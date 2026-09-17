@@ -4104,7 +4104,6 @@ $("#teamViewClose")
     hide("teamOverlay");
   };
 
-
 /* =====================================================
    EDIT TEAM
 ===================================================== */
@@ -4118,7 +4117,10 @@ $("#teamEditBtn")
   .onclick =
   () => {
 
+    console.log("EDIT TEAM BUTTON CLICKED");
+
     if(!myTeam || !myTeam.team){
+      alert("Chưa tải được thông tin team.");
       return;
     }
 
