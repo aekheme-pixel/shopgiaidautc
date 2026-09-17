@@ -3855,20 +3855,20 @@ if(status === "CONFIRMED"){
      * Vẫn đang chờ.
      */
 
-    if(
-      status ===
-      "PAYMENT_PENDING_CONFIRMATION"
-    ){
+if(
+  status === "AWAITING_PAYMENT" ||
+  status === "PAYMENT_PENDING_CONFIRMATION"
+){
 
-      $("#paymentStatus")
-        .style.display =
-        "block";
+  $("#paymentStatus")
+    .style.display =
+    "block";
 
-      $("#paymentStatus")
-        .textContent =
-        "ĐANG CHỜ XÁC NHẬN THANH TOÁN...";
+  $("#paymentStatus")
+    .textContent =
+    "⏳ ĐANG ĐỢI DUYỆT THANH TOÁN...";
 
-    }
+}
 
   }catch(error){
 
