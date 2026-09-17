@@ -1846,9 +1846,11 @@ footer{
 
 
 <button
+  type="button"
   id="teamEditBtn"
   class="submit"
-  style="margin-top:20px;">
+  style="margin-top:20px;"
+  onclick="openEditTeam(); return false;">
   ✏️ CHỈNH SỬA TEAM
 </button>
 
@@ -4112,10 +4114,11 @@ let editTeamLogoData = "";
 
 function openEditTeam(){
 
-  if(!myTeam || !myTeam.team){
-    alert("Không tìm thấy thông tin team.");
-    return;
-  }
+if(!myTeam || !myTeam.team){
+  alert("NÚT ĐÃ HOẠT ĐỘNG — nhưng chưa có dữ liệu team.");
+  console.log("myTeam =", myTeam);
+  return;
+}
 
   const team = myTeam.team;
 
