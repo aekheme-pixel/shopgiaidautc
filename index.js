@@ -2193,6 +2193,232 @@ async function teamMe(
 }
 
 /* ============================================================
+   TEAM UPDATE
+   ============================================================ */
+
+async function teamUpdate(request, env) {
+  const session = await currentSession(
+    request,
+    env
+  );
+
+  if (!session) {
+    return json(
+      {
+        ok: false,
+        error: "Bạn chưa đăng nhập."
+      },
+      401
+    );
+  }
+
+  let data;
+
+  try {
+    data = await bodyJson(request);
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          error?.message ||
+          "Dữ liệu gửi lên không hợp lệ."
+      },
+      400
+    );
+  }
+
+  const teamName = cleanString(
+    data.teamName,
+    60
+  );
+
+  const logoUrl = cleanString(
+    data.logoUrl,
+    180000
+  );
+
+  const registrantName = cleanString(
+    data.registrantName,
+    80
+  );
+
+  const contactInfo = cleanString(
+    data.contactInfo,
+    200
+  );
+
+  if (teamName.length < 2) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Tên team phải có ít nhất 2 ký tự."
+      },
+      400
+    );
+  }
+
+  if (!registrantName) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Vui lòng nhập tên người đăng ký."
+      },
+      400
+    );
+  }
+
+  if (!contactInfo) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Vui lòng nhập thông tin Zalo/Facebook."
+      },
+      400
+    );
+  }
+
+  if (
+    logoUrl &&
+    !/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(
+      logoUrl
+    )
+  ) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Logo team không đúng định dạng."
+      },
+      400
+    );
+  }
+
+  if (logoUrl.length > 180000) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Logo quá lớn. Vui lòng chọn ảnh nhỏ hơn."
+      },
+      400
+    );
+  }
+
+  /*
+   * Lấy đúng team thuộc tài khoản đang đăng nhập.
+   * Không cho sửa team của người khác.
+   */
+  const row = await env.DB
+    .prepare(`
+      SELECT
+        tm.id,
+        tm.name,
+        tm.tag,
+        tm.status,
+        tm.logo_url,
+        tm.registrant_name,
+        tm.contact_info
+      FROM teams tm
+      JOIN registrations r
+        ON r.team_id = tm.id
+      WHERE
+        tm.owner_id = ?
+        AND r.user_id = ?
+        AND r.status NOT IN (
+          'CANCELLED',
+          'REJECTED'
+        )
+      ORDER BY
+        r.id DESC
+      LIMIT 1
+    `)
+    .bind(
+      session.user.id,
+      session.user.id
+    )
+    .first();
+
+  if (!row) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không tìm thấy team của tài khoản này."
+      },
+      404
+    );
+  }
+
+  try {
+    await env.DB
+      .prepare(`
+        UPDATE teams
+        SET
+          name = ?,
+          logo_url = ?,
+          registrant_name = ?,
+          contact_info = ?
+        WHERE
+          id = ?
+          AND owner_id = ?
+      `)
+      .bind(
+        teamName,
+        logoUrl,
+        registrantName,
+        contactInfo,
+        row.id,
+        session.user.id
+      )
+      .run();
+
+    await writeAudit(
+      env,
+      session.user.id,
+      "TEAM_UPDATE",
+      `team:${row.id}`,
+      {
+        teamName,
+        registrantName,
+        contactInfo
+      }
+    );
+
+    return json({
+      ok: true,
+      message:
+        "Đã cập nhật thông tin team.",
+      team: {
+        id: Number(row.id),
+        name: teamName,
+        tag: row.tag || "",
+        status: row.status,
+        logoUrl,
+        registrantName,
+        contactInfo
+      }
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Không thể cập nhật team: " +
+          (
+            error?.message ||
+            "D1 error"
+          )
+      },
+      500
+    );
+  }
+}
+
+/* ============================================================
    TEAM PAYMENT CONFIRM
    ============================================================ */
 
@@ -5255,38 +5481,47 @@ async function api(
    * PUBLIC TEAM REGISTER
    */
 
-  if (
-    path ===
-      "/api/team/register" &&
-    method === "POST"
-  ) {
-    return teamRegister(
-      request,
-      env
-    );
-  }
+if (
+  path === "/api/team/register" &&
+  method === "POST"
+) {
+  return teamRegister(request, env);
+}
 
-  if (
-    path ===
-      "/api/team/me" &&
-    method === "GET"
-  ) {
-    return teamMe(
-      request,
-      env
-    );
-  }
+if (
+  path === "/api/team/me" &&
+  method === "GET"
+) {
+  return teamMe(request, env);
+}
 
-  if (
-    path ===
-      "/api/team/payment-confirm" &&
-    method === "POST"
-  ) {
-    return teamPaymentConfirm(
-      request,
-      env
-    );
-  }
+if (
+  path === "/api/team/update" &&
+  method === "POST"
+) {
+  return teamUpdate(request, env);
+}
+
+if (
+  path === "/api/team/payment-confirm" &&
+  method === "POST"
+) {
+  return teamPaymentConfirm(request, env);
+}
+
+if (
+  path === "/api/team/update" &&
+  method === "POST"
+) {
+  return teamUpdate(request, env);
+}
+
+if (
+  path === "/api/team/payment-confirm" &&
+  method === "POST"
+) {
+  return teamPaymentConfirm(request, env);
+}
 
   /*
    * PUBLIC RANKING
