@@ -4110,250 +4110,249 @@ $("#teamViewClose")
 
 let editTeamLogoData = "";
 
+function openEditTeam(){
 
-/* Mở form chỉnh sửa */
+  if(!myTeam || !myTeam.team){
+    alert("Không tìm thấy thông tin team.");
+    return;
+  }
 
-$("#teamEditBtn")
-  .onclick =
-  () => {
+  const team = myTeam.team;
 
-    console.log("EDIT TEAM BUTTON CLICKED");
+  $("#editTeamName").value =
+    team.name || "";
 
-    if(!myTeam || !myTeam.team){
-      alert("Chưa tải được thông tin team.");
-      return;
-    }
+  $("#editRegistrantName").value =
+    team.registrantName || "";
 
-    const team =
-      myTeam.team;
+  $("#editContactInfo").value =
+    team.contactInfo || "";
 
+  editTeamLogoData =
+    team.logoUrl || "";
 
-    $("#editTeamName")
-      .value =
-      team.name || "";
+  $("#editTeamLogo").value = "";
 
+  const preview =
+    $("#editTeamLogoPreview");
 
-    $("#editRegistrantName")
-      .value =
-      team.registrantName || "";
+  if(editTeamLogoData){
 
+    preview.src =
+      editTeamLogoData;
 
-    $("#editContactInfo")
-      .value =
-      team.contactInfo || "";
-
-
-    editTeamLogoData =
-      team.logoUrl || "";
-
-
-    $("#editTeamLogo")
-      .value = "";
-
-
-    const preview =
-      $("#editTeamLogoPreview");
-
-
-    if(editTeamLogoData){
-
-      preview.src =
-        editTeamLogoData;
-
-      preview.style.display =
-        "block";
-
-    }else{
-
-      preview.style.display =
-        "none";
-    }
-
-
-    $("#editTeamMessage")
-      .textContent = "";
-
-
-    $("#editTeamModal")
-      .style.display =
+    preview.style.display =
       "block";
-  };
 
+  }else{
 
-
-/* Đóng form */
-
-$("#editTeamCloseBtn")
-  .onclick =
-  () => {
-
-    $("#editTeamModal")
-      .style.display =
+    preview.style.display =
       "none";
-  };
+  }
+
+  $("#editTeamMessage").textContent = "";
+
+  $("#editTeamModal").style.display =
+    "block";
+}
 
 
+/* NÚT CHỈNH SỬA TEAM */
 
-/* Chọn logo mới */
+const teamEditBtn =
+  $("#teamEditBtn");
 
-$("#editTeamLogo")
-  .onchange =
-  async function(){
+if(teamEditBtn){
 
-    const file =
-      this.files?.[0];
+  teamEditBtn.addEventListener(
+    "click",
+    function(event){
 
-    if(!file){
-      return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      console.log(
+        "EDIT TEAM CLICKED"
+      );
+
+      openEditTeam();
+
     }
+  );
+
+}
 
 
-    if(
-      !file.type.startsWith("image/")
-    ){
+/* ĐÓNG FORM */
 
-      $("#editTeamMessage")
-        .textContent =
-        "❌ Vui lòng chọn file ảnh.";
+const editTeamCloseBtn =
+  $("#editTeamCloseBtn");
 
-      return;
+if(editTeamCloseBtn){
+
+  editTeamCloseBtn.addEventListener(
+    "click",
+    function(event){
+
+      event.preventDefault();
+
+      $("#editTeamModal")
+        .style.display = "none";
+
     }
+  );
+
+}
 
 
-    try{
+/* CHỌN LOGO */
 
-      const data =
-        await compressImage(file);
+const editTeamLogo =
+  $("#editTeamLogo");
 
+if(editTeamLogo){
 
-      if(!data){
+  editTeamLogo.addEventListener(
+    "change",
+    async function(){
 
-        throw new Error(
-          "LOGO_ERROR"
-        );
-      }
+      const file =
+        this.files?.[0];
 
+      if(!file) return;
 
-      if(data.length > 180000){
+      if(!file.type.startsWith("image/")){
 
         $("#editTeamMessage")
           .textContent =
-          "❌ Logo quá lớn. Hãy chọn ảnh khác.";
+          "❌ Vui lòng chọn file ảnh.";
 
         return;
       }
 
+      try{
 
-      editTeamLogoData =
-        data;
+        const data =
+          await compressImage(file);
+
+        if(!data){
+
+          throw new Error(
+            "LOGO_ERROR"
+          );
+
+        }
+
+        if(data.length > 180000){
+
+          $("#editTeamMessage")
+            .textContent =
+            "❌ Logo quá lớn. Hãy chọn ảnh khác.";
+
+          return;
+        }
+
+        editTeamLogoData =
+          data;
+
+        $("#editTeamLogoPreview").src =
+          data;
+
+        $("#editTeamLogoPreview")
+          .style.display =
+          "block";
+
+        $("#editTeamMessage")
+          .textContent = "";
+
+      }catch(error){
+
+        console.error(
+          "EDIT LOGO:",
+          error
+        );
+
+        $("#editTeamMessage")
+          .textContent =
+          "❌ Không thể xử lý logo.";
+      }
+
+    }
+  );
+
+}
 
 
-      $("#editTeamLogoPreview")
-        .src =
-        editTeamLogoData;
+/* LƯU */
 
+const saveTeamEditBtn =
+  $("#saveTeamEditBtn");
 
-      $("#editTeamLogoPreview")
-        .style.display =
-        "block";
+if(saveTeamEditBtn){
 
+  saveTeamEditBtn.addEventListener(
+    "click",
+    async function(event){
 
-      $("#editTeamMessage")
-        .textContent = "";
+      event.preventDefault();
 
+      const teamName =
+        $("#editTeamName")
+          .value
+          .trim();
 
-    }catch(error){
+      const registrantName =
+        $("#editRegistrantName")
+          .value
+          .trim();
 
-      console.error(
-        "EDIT LOGO:",
-        error
-      );
+      const contactInfo =
+        $("#editContactInfo")
+          .value
+          .trim();
 
+      if(!teamName){
+
+        $("#editTeamMessage")
+          .textContent =
+          "❌ Vui lòng nhập tên team.";
+
+        return;
+      }
+
+      if(!registrantName){
+
+        $("#editTeamMessage")
+          .textContent =
+          "❌ Vui lòng nhập tên người đăng ký.";
+
+        return;
+      }
+
+      if(!contactInfo){
+
+        $("#editTeamMessage")
+          .textContent =
+          "❌ Vui lòng nhập Zalo/Facebook.";
+
+        return;
+      }
+
+      saveTeamEditBtn.disabled = true;
 
       $("#editTeamMessage")
         .textContent =
-        "❌ Không thể xử lý logo.";
-    }
-  };
+        "⏳ Đang lưu thay đổi...";
 
+      try{
 
+        await api(
+          "/api/team/update",
+          {
+            method:"POST",
 
-/* Lưu thay đổi */
+            body:JSON.stringify({
 
-$("#saveTeamEditBtn")
-  .onclick =
-  async () => {
-
-    const teamName =
-      $("#editTeamName")
-        .value
-        .trim();
-
-
-    const registrantName =
-      $("#editRegistrantName")
-        .value
-        .trim();
-
-
-    const contactInfo =
-      $("#editContactInfo")
-        .value
-        .trim();
-
-
-    if(!teamName){
-
-      $("#editTeamMessage")
-        .textContent =
-        "❌ Vui lòng nhập tên team.";
-
-      return;
-    }
-
-
-    if(!registrantName){
-
-      $("#editTeamMessage")
-        .textContent =
-        "❌ Vui lòng nhập tên người đăng ký.";
-
-      return;
-    }
-
-
-    if(!contactInfo){
-
-      $("#editTeamMessage")
-        .textContent =
-        "❌ Vui lòng nhập Zalo/Facebook.";
-
-      return;
-    }
-
-
-    const button =
-      $("#saveTeamEditBtn");
-
-
-    button.disabled =
-      true;
-
-
-    $("#editTeamMessage")
-      .textContent =
-      "⏳ Đang lưu thay đổi...";
-
-
-    try{
-
-      await api(
-        "/api/team/update",
-        {
-          method:"POST",
-
-          body:
-            JSON.stringify({
               teamName:
                 teamName,
 
@@ -4365,70 +4364,56 @@ $("#saveTeamEditBtn")
 
               contactInfo:
                 contactInfo
+
             })
-        }
-      );
-
-
-      $("#editTeamMessage")
-        .textContent =
-        "✅ Đã cập nhật team!";
-
-
-      /*
-       * Lấy lại dữ liệu team mới
-       */
-
-      await loadMyTeam();
-
-
-      /*
-       * Đóng form sau khi lưu
-       */
-
-      setTimeout(
-        () => {
-
-          $("#editTeamModal")
-            .style.display =
-            "none";
-
-
-          /*
-           * Mở lại TEAM CỦA BẠN
-           * để hiển thị dữ liệu mới
-           */
-
-          openMyTeam();
-
-        },
-        700
-      );
-
-
-    }catch(error){
-
-      console.error(
-        "UPDATE TEAM:",
-        error
-      );
-
-
-      $("#editTeamMessage")
-        .textContent =
-        "❌ " +
-        (
-          error.message ||
-          "Không thể cập nhật team."
+          }
         );
 
+        $("#editTeamMessage")
+          .textContent =
+          "✅ Đã cập nhật team!";
 
-    }finally{
+        await loadMyTeam();
 
-      button.disabled =
-        false;
+        setTimeout(
+          async () => {
+
+            $("#editTeamModal")
+              .style.display =
+              "none";
+
+            await openMyTeam();
+
+          },
+          700
+        );
+
+      }catch(error){
+
+        console.error(
+          "UPDATE TEAM:",
+          error
+        );
+
+        $("#editTeamMessage")
+          .textContent =
+          "❌ " +
+          (
+            error.message ||
+            "Không thể cập nhật team."
+          );
+
+      }finally{
+
+        saveTeamEditBtn.disabled =
+          false;
+
+      }
+
     }
-  };
+  );
+
+}
 
 
 /* =====================================================
