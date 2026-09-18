@@ -1849,8 +1849,7 @@ footer{
   type="button"
   id="teamEditBtn"
   class="submit"
-  style="margin-top:20px;"
-  onclick="alert('CLICK OK'); return false;">
+  style="margin-top:20px;">
   ✏️ CHỈNH SỬA TEAM
 </button>
 
@@ -4114,13 +4113,32 @@ let editTeamLogoData = "";
 
 function openEditTeam(){
 
-if(!myTeam || !myTeam.team){
-  alert("NÚT ĐÃ HOẠT ĐỘNG — nhưng chưa có dữ liệu team.");
+  console.log("EDIT TEAM CLICKED");
   console.log("myTeam =", myTeam);
-  return;
-}
 
-  const team = myTeam.team;
+  if(!myTeam){
+
+    alert(
+      "❌ Chưa có dữ liệu team.\n\n" +
+      "Hãy tải lại trang rồi thử lại."
+    );
+
+    return;
+  }
+
+  const team =
+    myTeam.team ||
+    myTeam.data?.team;
+
+  if(!team){
+
+    alert(
+      "❌ Không tìm thấy dữ liệu team.\n\n" +
+      JSON.stringify(myTeam)
+    );
+
+    return;
+  }
 
   $("#editTeamName").value =
     team.name || "";
@@ -4148,6 +4166,8 @@ if(!myTeam || !myTeam.team){
       "block";
 
   }else{
+
+    preview.removeAttribute("src");
 
     preview.style.display =
       "none";
