@@ -1849,7 +1849,8 @@ footer{
   type="button"
   id="teamEditBtn"
   class="submit"
-  style="margin-top:20px;">
+  onclick="try{openEditTeam();}catch(e){alert('LỖI: '+e.message);}"
+>
   ✏️ CHỈNH SỬA TEAM
 </button>
 
