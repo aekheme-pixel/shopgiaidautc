@@ -4458,6 +4458,77 @@ if(saveTeamEditBtn){
 })();
 
 </script>
+<!-- EDIT TEAM MODAL -->
+<div id="editTeamModal" style="display:none;">
+  <div class="team-view">
+
+    <h2>CHỈNH SỬA TEAM</h2>
+
+    <label>TÊN TEAM</label>
+    <input
+      id="editTeamName"
+      type="text"
+      placeholder="Nhập tên team"
+    >
+
+    <label>LOGO TEAM</label>
+    <input
+      id="editTeamLogo"
+      type="file"
+      accept="image/*"
+    >
+
+    <img
+      id="editTeamLogoPreview"
+      style="
+        display:none;
+        width:160px;
+        aspect-ratio:4/3;
+        object-fit:cover;
+        border-radius:12px;
+        margin:10px auto;
+      "
+    >
+
+    <label>TÊN NGƯỜI ĐĂNG KÝ</label>
+    <input
+      id="editRegistrantName"
+      type="text"
+      placeholder="Nhập tên người đăng ký"
+    >
+
+    <label>ZALO / FACEBOOK</label>
+    <input
+      id="editContactInfo"
+      type="text"
+      placeholder="Nhập Zalo hoặc Facebook"
+    >
+
+    <div
+      id="editTeamMessage"
+      style="margin-top:10px;"
+    ></div>
+
+    <button
+      type="button"
+      id="saveTeamEditBtn"
+      class="submit"
+      style="margin-top:20px;"
+    >
+      💾 LƯU THAY ĐỔI
+    </button>
+
+    <button
+      type="button"
+      id="editTeamCloseBtn"
+      class="submit"
+      style="margin-top:10px;"
+    >
+      ĐÓNG
+    </button>
+
+  </div>
+</div>
 
 </body>
 </html>
